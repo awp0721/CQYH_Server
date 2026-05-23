@@ -395,8 +395,15 @@ namespace 游戏登录器
                         }
                         主选项卡.SelectedIndex = 3;
                         // 保存本地输入框的账号而非服务器回显, 并通过 DPAPI 加密
-                        Settings.Default.保存账号 = 加密本地字符串(登录_账号名字输入框.Text);
-                        Settings.Default.Save();
+                        // VV: 磁盘满 / 权限拒绝 / user.config 损坏时 Save 会抛, 不能让登录流程崩溃
+                        try
+                        {
+                            Settings.Default.保存账号 = 加密本地字符串(登录_账号名字输入框.Text);
+                            Settings.Default.Save();
+                        }
+                        catch
+                        {
+                        }
                         break;
                     }
                 case "1":
@@ -471,8 +478,15 @@ namespace 游戏登录器
                             }
                             string 区服名 = 启动_选中区服标签.Text;
                             string 票据 = array[3];
-                            Settings.Default.保存区服 = 加密本地字符串(区服名);
-                            Settings.Default.Save();
+                            // VV: 配置写入失败不应阻断启动游戏流程
+                            try
+                            {
+                                Settings.Default.保存区服 = 加密本地字符串(区服名);
+                                Settings.Default.Save();
+                            }
+                            catch
+                            {
+                            }
                             // JJ: 释放上一次启动的 Process 句柄, 防止多次启动游戏泄漏 OS 句柄
                             游戏进程?.Dispose();
                             游戏进程 = new Process();

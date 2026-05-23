@@ -190,9 +190,16 @@ namespace 账号服务器
             if (!File.Exists(".\\Server.txt"))
             {
                 添加日志("配置文件不存在, 已自动创建");
-                File.WriteAllBytes(".\\Server.txt", new byte[0]);
-                string text = "127.0.0.1,8701/传奇永恒";
-                File.WriteAllText(@".\\Server.txt", text);
+                try
+                {
+                    // NN: 单次原子写入即可, 不必先空文件再写; try/catch 防权限拒绝/锁定时 UI 崩
+                    File.WriteAllText(".\\Server.txt", "127.0.0.1,8701/传奇永恒");
+                }
+                catch (Exception 创建异常)
+                {
+                    添加日志("自动创建 Server.txt 失败: " + 创建异常.Message);
+                    return;
+                }
             }
 
             if (区服数据 == null || 区服数据.Count == 0)
@@ -286,11 +293,25 @@ namespace 账号服务器
             if (!File.Exists(".\\Server.txt"))
             {
                 添加日志("配置文件不存在, 已自动创建");
-                File.WriteAllBytes(".\\Server.txt", new byte[0]);
-                string text = "127.0.0.1,8701/传奇永恒";
-                File.WriteAllText(@".\\Server.txt", text);
+                try
+                {
+                    // TT: 同 NN, 单次原子写入 + 异常隔离
+                    File.WriteAllText(".\\Server.txt", "127.0.0.1,8701/传奇永恒");
+                }
+                catch (Exception 创建异常)
+                {
+                    添加日志("自动创建 Server.txt 失败: " + 创建异常.Message);
+                    return;
+                }
             }
-            Process.Start("notepad.exe", ".\\Server.txt");
+            try
+            {
+                Process.Start("notepad.exe", ".\\Server.txt");
+            }
+            catch (Exception 打开异常)
+            {
+                添加日志("打开 notepad 失败: " + 打开异常.Message);
+            }
         }
 
         private void 加载配置按钮_Click(object sender, EventArgs e)

@@ -1,0 +1,70 @@
+本仓库 (Elaina Engine · 伊蕾娜引擎) 内容仅供学习与技术研究使用。
+
+This repository (Elaina Engine) is provided for educational and research
+purposes only.
+
+================================================================================
+重要声明 / Important Notice
+================================================================================
+
+1. 来源 / Origin
+   本仓库的核心代码来自对某商业游戏服务端 DLL 的反编译, 经过反混淆、重命名、
+   结构重组、安全加固等多轮加工. 仓库维护者对该商业代码的原始版权不主张所有权.
+
+   The core code in this repository originated from decompilation of a
+   commercial game server DLL, subsequently deobfuscated, renamed, reorganized
+   and hardened against multiple security vulnerabilities. The repository
+   maintainer makes NO claim of ownership over the original commercial code.
+
+2. 允许的用途 / Permitted Use
+   - 个人学习 .NET / C# / 游戏服务端架构 / 网络协议 / 安全审计
+   - 学术研究, 包括但不限于公开发表的安全分析、架构论文等
+   - 引用本仓库内容时, 请保留本声明并注明来源链接
+
+   - Personal study of .NET / C# / game server architecture / network
+     protocols / security auditing
+   - Academic research, including but not limited to publicly disclosed
+     security analyses and architecture papers
+   - When quoting content from this repository, please preserve this notice
+     and include a link back to the source
+
+3. 禁止的用途 / Prohibited Use
+   - 直接运营商业游戏服务器或以盈利为目的部署本代码
+   - 重新分发时移除本声明、SECURITY_AUDIT.md 或 CHANGELOG.md
+   - 任何违反所在司法管辖区相关法律的使用方式
+
+   - Operating commercial game servers for profit using this code
+   - Redistribution that removes this LICENSE, SECURITY_AUDIT.md, or
+     CHANGELOG.md
+   - Any use that violates the laws of your jurisdiction
+
+4. 第三方权利 / Third-Party Rights
+   原始代码版权归原作者所有 (相关线索见 SECURITY_AUDIT.md). 本仓库的存在不
+   意味着原作者授权了任何用途. README 顶部使用的形象引用了《魔女之旅 / 魔女
+   の旅々》中的角色 Elaina, 该形象版权归原作者所有.
+
+   Copyright of the original code remains with its original authors (see
+   SECURITY_AUDIT.md for clues to identification). The existence of this
+   repository does not imply licensing by the original authors. The image at
+   the top of README references the character Elaina from "Wandering Witch:
+   The Journey of Elaina" (魔女の旅々), whose rights belong to the original
+   author.
+
+5. 免责 / Disclaimer
+   本仓库按"现状"提供, 不提供任何明示或暗示的担保. 使用者使用本仓库内容
+   所产生的任何法律责任、经济损失、数据损坏等后果均由使用者自行承担.
+   仓库维护者不为任何直接或间接损失负责.
+
+   THIS REPOSITORY IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED. THE USER ASSUMES ALL LEGAL, FINANCIAL, AND DATA-LOSS RISKS
+   ARISING FROM USING THIS REPOSITORY. THE REPOSITORY MAINTAINER SHALL NOT
+   BE LIABLE FOR ANY DIRECT OR INDIRECT DAMAGES.
+
+6. 取下请求 / Takedown Requests
+   若您是原始代码或形象的版权持有人, 希望本仓库下架, 请通过 GitHub Issues
+   或 DMCA 流程联系仓库维护者, 将在合理时间内响应处理.
+
+   If you are the copyright holder of the original code or imagery and wish
+   to have this repository taken down, please contact the repository
+   maintainer via GitHub Issues or the DMCA process. A reasonable response
+   will be provided.

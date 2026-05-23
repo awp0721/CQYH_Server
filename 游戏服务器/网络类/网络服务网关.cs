@@ -363,7 +363,15 @@ namespace 游戏服务器.网络类
             {
                 客户网络 result;
                 if (网络服务网关.等待移除表.TryDequeue(out result))
+                {
                     网络服务网关.网络连接表.Remove(result);
+                    // 同步释放 per-IP 计数; 不能因 result.网络地址 为 null 就漏减
+                    string ip = result?.网络地址;
+                    if (!string.IsNullOrEmpty(ip))
+                    {
+                        网络服务网关.客户连接计数.AddOrUpdate(ip, 0, (_, c) => Math.Max(0, c - 1));
+                    }
+                }
             }
             //-----------------------
             while (!网络服务网关.等待添加表.IsEmpty)
@@ -403,17 +411,21 @@ namespace 游戏服务器.网络类
                 {
                     tcpClient.Client.Close();
                 }
+                else if (网络服务网关.网络连接表.Count >= 全局最大连接数)
+                {
+                    // 全局连接到上限, 不再接受新连接 (防止内存/fd 耗尽)
+                    tcpClient.Client.Close();
+                }
+                else if (网络服务网关.客户连接计数.AddOrUpdate(text, 1, (_, c) => c + 1) > 单IP最大连接数)
+                {
+                    // 该 IP 已超 per-IP 上限, 回滚计数并拒绝
+                    网络服务网关.客户连接计数.AddOrUpdate(text, 0, (_, c) => Math.Max(0, c - 1));
+                    tcpClient.Client.Close();
+                }
                 else
                 {
                     网络服务网关.等待添加表?.Enqueue(new 客户网络(tcpClient));
                 }
-                /*
-                else if (网络服务网关.网络连接表.Count < 9999)
-                //else if (网络服务网关.网络连接表.Count < (LicenseLoader.isLicense ? 10000 : 5)) //人数限制
-				{
-					网络服务网关.等待添加表?.Enqueue(new 客户网络(tcpClient));
-				}
-				*/
             }
             catch (Exception ex)
             {

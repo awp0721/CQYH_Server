@@ -11,7 +11,10 @@ namespace 账号服务器
 		[STAThread]
 		private static void Main()
 		{
-			myMutex = new Mutex(initiallyOwned: false, "CY_LoginServer_Mutex", out var createdNew);
+			// OO: Mutex 名加用户 SID, 防止同机器其他账户创建同名 Mutex 阻塞服务启动 (与客户端对齐)
+			System.Security.Principal.WindowsIdentity identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+			string mutexName = "Local\\CY_LoginServer_Mutex_" + (identity.User?.Value ?? "default");
+			myMutex = new Mutex(initiallyOwned: false, mutexName, out var createdNew);
 			if (createdNew)
 			{
 				Application.EnableVisualStyles();

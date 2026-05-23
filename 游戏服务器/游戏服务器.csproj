@@ -16,10 +16,10 @@
 		<RootNamespace />
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-		<NoWarn>1701;1702;CA1416</NoWarn>
+		<NoWarn>1701;1702;CA1416;CS0162;CS0169;CS0219;CS0414;CS0649</NoWarn>
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-		<NoWarn>1701;1702;CA1416</NoWarn>
+		<NoWarn>1701;1702;CA1416;CS0162;CS0169;CS0219;CS0414;CS0649</NoWarn>
 	</PropertyGroup>
 	<ItemGroup>
 		<Compile Remove="------------\**" />

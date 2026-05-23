@@ -1,0 +1,34 @@
+# 默认: 自动识别文本/二进制, 文本由 git 按平台规范化
+* text=auto
+
+# 强制 LF (跨平台脚本类)
+*.sh    text eol=lf
+*.bash  text eol=lf
+
+# 强制 CRLF (Windows-only 项目文件)
+*.sln       text eol=crlf
+*.csproj    text eol=crlf
+*.config    text eol=crlf
+*.manifest  text eol=crlf
+*.resx      text eol=crlf
+
+# 二进制资源
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.bmp  binary
+*.dll  binary
+*.exe  binary
+*.pdb  binary
+*.zip  binary
+*.7z   binary
+*.rar  binary
+*.lib  binary
+*.so   binary
+*.dylib binary
+*.db   binary
+
+# diff/合并友好
+*.cs    diff=csharp text

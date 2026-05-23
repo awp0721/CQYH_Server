@@ -17288,8 +17288,11 @@ namespace 游戏服务器.地图类
                     错误代码 = 5636
                 });
             }
-            else if (金币数量 > 0 && this.金币数量 >= 金币数量 + (int)Math.Ceiling((float)金币数量 * 0.04f))
+            else if (金币数量 > 0 && 金币数量 <= 1_000_000_000
+                && this.金币数量 >= (uint)金币数量 + (uint)Math.Ceiling((float)金币数量 * 0.04f))
             {
+                // 上限 10 亿 + 改 uint 加法, 防止 客户端 int 接近 MaxValue 时
+                // 加手续费溢出成负数, 再被 uint vs 负 long 比较意外通过校验 → 凭空放入海量金币
                 if (this.当前交易.金币重复(this))
                 {
                     this.当前交易?.结束交易();
@@ -21312,6 +21315,10 @@ namespace 游戏服务器.地图类
         {
             if (!Settings.屏蔽威望 && 游戏威望.数据表.TryGetValue(序号, out var value))
             {
+                if (值 < 0)
+                {
+                    return;
+                }
                 if (值 > value.最大数值)
                 {
                     值 = value.最大数值;
@@ -21598,6 +21605,14 @@ namespace 游戏服务器.地图类
 
         public void 领取七天奖励(byte 未知参数, int 领取编号)
         {
+            if (领取编号 < 36 || 领取编号 > 99)
+            {
+                return;
+            }
+            if (!常量类.七天最大进度表.ContainsKey((ushort)领取编号))
+            {
+                return;
+            }
             if (this.角色数据.七天进度.TryGetValue((byte)领取编号, out var v) && v >= 常量类.七天最大进度表[(ushort)领取编号] && 传永七天.数据表.TryGetValue(领取编号, out var value) && (this.角色数据.七天领取.V & (1L << 领取编号 - 36)) == 0L)
             {
                 this.角色数据.七天领取.V |= 1L << 领取编号 - 36;
@@ -21614,9 +21629,14 @@ namespace 游戏服务器.地图类
 
         public void 修改七天进度(byte 七天编号, int 修改数值)
         {
-            if (this.角色数据.七天进度.TryGetValue(七天编号, out var v) && v < 常量类.七天最大进度表[七天编号])
+            if (修改数值 < 0 || !常量类.七天最大进度表.ContainsKey(七天编号))
             {
-                this.角色数据.七天进度[七天编号] = 修改数值;
+                return;
+            }
+            ushort 上限 = 常量类.七天最大进度表[七天编号];
+            if (this.角色数据.七天进度.TryGetValue(七天编号, out var v) && v < 上限)
+            {
+                this.角色数据.七天进度[七天编号] = Math.Min(修改数值, (int)上限);
             }
         }
 
