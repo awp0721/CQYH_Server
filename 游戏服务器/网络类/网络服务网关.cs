@@ -33,6 +33,13 @@ namespace 游戏服务器.网络类
 
         public static HashSet<客户网络> 网络连接表;
 
+        // DoS 防护: 限制单 IP 并发 TCP 连接数 + 全局总量上限.
+        // 原 444 行的 9999 全局上限被注释掉, 加上无 per-IP 限制 → 攻击者从单机即可耗尽 fd/内存.
+        // 计数表只在 异步连接 (accept callback) 与 等待移除表 处理点变更, ConcurrentDictionary 即可.
+        public const int 单IP最大连接数 = 10;
+        public const int 全局最大连接数 = 9999;
+        public static ConcurrentDictionary<string, int> 客户连接计数 = new ConcurrentDictionary<string, int>();
+
         public static ConcurrentQueue<客户网络> 等待移除表;
 
         public static ConcurrentQueue<客户网络> 等待添加表;

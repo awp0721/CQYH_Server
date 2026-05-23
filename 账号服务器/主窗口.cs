@@ -241,6 +241,8 @@ namespace 账号服务器
         {
             if (MessageBox.Show("确定关闭服务器?", "", MessageBoxButtons.YesNo, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
             {
+                // LL: 与"结束进程"路径对齐, 先优雅关闭 UDP socket 与限速表定时器再退出.
+                网络通信.结束服务();
                 最小化到托盘.Visible = false;
                 Environment.Exit(0);
                 return;

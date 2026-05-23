@@ -1,8 +1,14 @@
+<div align="center">
+
+<img src="assets/elaina.png" alt="Elaina · 伊蕾娜" width="520">
+
 # Elaina Engine · 伊蕾娜引擎
 
 > 公开发布的 .NET 8 游戏服务端引擎，包含游戏服务器、账号服务器、客户端登录器三个独立项目。
 
-**游戏服务器代号: Elaina (伊蕾娜)**
+**游戏服务器代号: Elaina (伊蕾娜)** · 角色形象致敬《魔女之旅 / 魔女の旅々》
+
+</div>
 
 ## 📦 项目结构
 

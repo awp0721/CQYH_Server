@@ -473,6 +473,8 @@ namespace 游戏登录器
                             string 票据 = array[3];
                             Settings.Default.保存区服 = 加密本地字符串(区服名);
                             Settings.Default.Save();
+                            // JJ: 释放上一次启动的 Process 句柄, 防止多次启动游戏泄漏 OS 句柄
+                            游戏进程?.Dispose();
                             游戏进程 = new Process();
                             游戏进程.StartInfo.FileName = 游戏路径;
                             // 使用 ArgumentList 由 .NET 按 CommandLineToArgvW 规则自动转义,

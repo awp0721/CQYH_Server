@@ -3184,6 +3184,10 @@ namespace 游戏服务器.地图类
 
         public 物品数据 玩家获得物品(int 物品编号, int 物品持久 = 1, string 存储日志 = "", bool 是否绑定 = false, string 掉落怪物 = "")
         {
+            if (物品持久 <= 0)
+            {
+                return null;
+            }
             if (游戏物品.数据表.TryGetValue(物品编号, out var value))
             {
                 if (value.持久类型 == 物品持久分类.堆叠)
@@ -3243,6 +3247,10 @@ namespace 游戏服务器.地图类
 
         public void 玩家获得物品(游戏物品 物品模板, byte 物品位置, string 日志, int 物品持久 = 1, bool 是否绑定 = false, string 掉落怪物 = "")
         {
+            if (物品持久 <= 0 || 物品模板 == null)
+            {
+                return;
+            }
             if (物品模板.持久类型 == 物品持久分类.堆叠)
             {
                 foreach (KeyValuePair<byte, 物品数据> item in this.角色背包)
@@ -3576,6 +3584,10 @@ namespace 游戏服务器.地图类
 
         public void 玩家获得货币(游戏货币 currency, int value)
         {
+            if (value <= 0)
+            {
+                return;
+            }
             this.角色数据.角色货币[currency] += (uint)value;
             this.网络连接?.发送封包(new 货币数量变动
             {
