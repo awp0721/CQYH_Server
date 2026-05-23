@@ -1,0 +1,114 @@
+name: 🐛 Bug 报告 / Bug Report
+description: 报告代码中的功能性问题或异常行为
+title: "[Bug] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢报告 Bug！请尽量提供完整信息，方便定位和修复。
+
+        如果你认为这是**安全漏洞**，请改用 [Security Advisory](https://github.com/awp0721/CQYH_Server/security/advisories/new) 私密报告，**不要在公开 Issue 中提交可武器化的 PoC**。
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug 描述
+      description: 简明扼要说明问题是什么
+      placeholder: 例如：游戏服务器在玩家断线重连后，背包物品丢失
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 按顺序列出复现 Bug 的步骤
+      placeholder: |
+        1. 启动账号服务器
+        2. 登录账号 X
+        3. 创建角色 Y，进入地图 Z
+        4. 在背包放一个物品 A
+        5. 强制断网 5 秒
+        6. 重连
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+      description: 你期望发生的是什么？
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 实际发生了什么？
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: 仓库版本 / Commit Hash
+      description: 复现时使用的 commit（`git rev-parse HEAD` 或 GitHub 上的 commit 链接）
+      placeholder: 例如：4d11aa9 或 v0.3.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: project
+    attributes:
+      label: 涉及项目
+      multiple: true
+      options:
+        - 游戏服务器
+        - 账号服务器
+        - 游戏登录器
+        - 构建/部署配置
+        - 文档
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 运行环境
+      placeholder: |
+        - OS: Windows 11 Pro 24H2
+        - .NET SDK: 8.0.405
+        - IDE: Visual Studio 2022 17.12
+        - DevExpress: 23.1.x
+      value: |
+        - OS:
+        - .NET SDK:
+        - IDE:
+        - DevExpress:
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 异常堆栈
+      description: 粘贴相关日志或异常堆栈（用 ``` 包围以保持格式）
+      render: text
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 提交前检查
+      options:
+        - label: 已搜索 [Issues](https://github.com/awp0721/CQYH_Server/issues?q=is%3Aissue) 确认无重复
+          required: true
+        - label: 已阅读 [CONTRIBUTING.md](https://github.com/awp0721/CQYH_Server/blob/main/CONTRIBUTING.md)
+          required: true
+        - label: 已确认这不是安全漏洞（否则请改用 Security Advisory）
+          required: true

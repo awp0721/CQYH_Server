@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 安全漏洞披露 / Security Vulnerability Disclosure
+    url: https://github.com/awp0721/CQYH_Server/security/advisories/new
+    about: 通过 GitHub Private Vulnerability Reporting 私密披露安全漏洞 (不要直接公开提 Issue)
+  - name: 💬 一般讨论 / General Discussion
+    url: https://github.com/awp0721/CQYH_Server/discussions
+    about: 设计讨论、使用经验交流、不属于 bug 或 feature request 的话题
+  - name: 📖 文档
+    url: https://github.com/awp0721/CQYH_Server/blob/main/README.md
+    about: 提问前请先阅读 README / CONTRIBUTING / SECURITY_AUDIT

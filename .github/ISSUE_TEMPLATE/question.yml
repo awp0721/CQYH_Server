@@ -1,0 +1,56 @@
+name: ❓ 提问 / Question
+description: 关于代码、构建、架构的使用问题
+title: "[Question] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提问前请先：
+        1. 阅读 [README](https://github.com/awp0721/CQYH_Server/blob/main/README.md) 的构建说明部分
+        2. 搜索现有的 [Issues](https://github.com/awp0721/CQYH_Server/issues?q=is%3Aissue)
+        3. 查看 [SECURITY_AUDIT](https://github.com/awp0721/CQYH_Server/blob/main/SECURITY_AUDIT.md) 看是否已记录
+
+  - type: textarea
+    id: question
+    attributes:
+      label: 你的问题
+      placeholder: 描述你卡在哪里 / 想了解什么
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: 已经尝试过的
+      description: 你为解决这个问题做了哪些尝试？看过哪些文档？
+      placeholder: |
+        - 读过 README 的构建说明
+        - 跑了 dotnet restore，提示...
+        - 搜过 issue #XX 但情况不同
+    validations:
+      required: true
+
+  - type: dropdown
+    id: topic
+    attributes:
+      label: 问题类型
+      options:
+        - 构建 / 编译
+        - 运行 / 部署
+        - 代码理解
+        - 架构设计
+        - 安全审计
+        - 文档
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境信息（如适用）
+      placeholder: |
+        - OS:
+        - .NET SDK:
+        - IDE:
