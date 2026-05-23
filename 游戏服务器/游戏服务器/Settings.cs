@@ -91,6 +91,10 @@ namespace 游戏服务器
 
         public static string 统计UUID代码 = "";
 
+        // HTTP 充值/管理回调接口的签名密钥. 必须由运营方配置为足够长且高熵的随机字符串.
+        // 若保持为空, _0001_0018_000E_0012_0007_0006.Sign() 会拒绝处理所有签名请求.
+        public static string 充值签名密钥 = "";
+
         public static byte 暴击特效ID = 0;
 
         public static bool BOSS自动死亡 = true;

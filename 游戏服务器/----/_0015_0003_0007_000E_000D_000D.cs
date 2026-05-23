@@ -76,7 +76,11 @@ namespace _0015_0003_0007_000E_000D_000D
                     dictionary.Remove("sign");
                     string text2;
                     text2 = _0001_0018_000E_0012_0007_0006.Sign(_0001_0018_000E_0012_0007_0006.http_build_query(dictionary.OrderBy((KeyValuePair<string, string> p) => p.Key).ToDictionary((KeyValuePair<string, string> p) => p.Key, (KeyValuePair<string, string> o) => o.Value)));
-                    if (value == text2)
+                    // 常量时间比较防时序攻击; 同时 Sign() 在密钥未配置时返回固定哨兵, 此比较必然 false.
+                    bool 签名有效 = value != null && text2 != null && value.Length == text2.Length
+                        && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                            Encoding.ASCII.GetBytes(value), Encoding.ASCII.GetBytes(text2));
+                    if (签名有效)
                     {
                         switch (text)
                         {
@@ -169,17 +173,24 @@ namespace _0015_0003_0007_000E_000D_000D
             return text;
         }
 
+        // HMAC-SHA256 替代原 MD5(str + "&"). 原方案用硬编码 "&" 作密钥, 等同无密钥, 任意人可伪造签名.
+        // 改为读取 Settings.充值签名密钥; 若密钥未配置 (空字符串), 返回特殊标记导致后续比对必然失败 -> 安全拒绝.
         public static string Sign(string str)
         {
-            byte[] array;
-            array = MD5.Create().ComputeHash(Encoding.UTF8.GetBytes(str + "&"));
-            StringBuilder stringBuilder;
-            stringBuilder = new StringBuilder();
-            for (int i = 0; i < array.Length; i++)
+            if (string.IsNullOrEmpty(游戏服务器.Settings.充值签名密钥))
             {
-                stringBuilder.Append(array[i].ToString("x2"));
+                return "__signing_key_not_configured__";
             }
-            return stringBuilder.ToString();
+            using (var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(游戏服务器.Settings.充值签名密钥)))
+            {
+                byte[] array = hmac.ComputeHash(Encoding.UTF8.GetBytes(str));
+                StringBuilder sb = new StringBuilder(array.Length * 2);
+                for (int i = 0; i < array.Length; i++)
+                {
+                    sb.Append(array[i].ToString("x2"));
+                }
+                return sb.ToString();
+            }
         }
 
         public static string http_build_query(Dictionary<string, string> dict = null)

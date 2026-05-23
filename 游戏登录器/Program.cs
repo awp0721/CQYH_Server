@@ -15,7 +15,9 @@ namespace 游戏登录器
             System.Security.Principal.WindowsPrincipal principal = new System.Security.Principal.WindowsPrincipal(identity);
             if (principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator))
             {
-                myMutex = new Mutex(initiallyOwned: false, "CY_Launcher_Mutex", out var createdNew);
+                // Mutex 名加当前用户 SID，避免不同账户/恶意进程抢占同名 Mutex 阻塞登录器启动
+                string mutexName = "Local\\CY_Launcher_Mutex_" + (identity.User?.Value ?? "default");
+                myMutex = new Mutex(initiallyOwned: false, mutexName, out var createdNew);
                 if (createdNew)
                 {
                     Application.EnableVisualStyles();

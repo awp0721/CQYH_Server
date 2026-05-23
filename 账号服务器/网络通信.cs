@@ -22,6 +22,92 @@ namespace 账号服务器
 
 		public static ConcurrentQueue<数据封包> 数据处理队列;
 
+		// 每 IP 限速桶, 同时承载认证失败计数与注册次数计数.
+		private sealed class 限速桶
+		{
+			public int 失败计数;
+			public DateTime 失败窗口起点;
+			public DateTime 解封时间;
+			public int 注册计数;
+			public DateTime 注册窗口起点;
+		}
+
+		private static readonly ConcurrentDictionary<IPAddress, 限速桶> 限速表
+			= new ConcurrentDictionary<IPAddress, 限速桶>();
+
+		// 认证失败: 60 秒内累计 10 次就封禁 5 分钟.
+		private const int 失败窗口秒数 = 60;
+		private const int 失败最大次数 = 10;
+		private const int 封禁秒数 = 300;
+
+		// 注册: 5 分钟内每 IP 最多 3 次.
+		private const int 注册窗口秒数 = 300;
+		private const int 注册最大次数 = 3;
+
+		private static 限速桶 取桶(IPAddress ip)
+		{
+			return 限速表.GetOrAdd(ip, _ => new 限速桶
+			{
+				失败窗口起点 = DateTime.UtcNow,
+				注册窗口起点 = DateTime.UtcNow
+			});
+		}
+
+		private static bool 是否被封禁(IPAddress ip)
+		{
+			return DateTime.UtcNow < 取桶(ip).解封时间;
+		}
+
+		private static void 记录认证失败(IPAddress ip)
+		{
+			限速桶 桶 = 取桶(ip);
+			lock (桶)
+			{
+				DateTime now = DateTime.UtcNow;
+				if ((now - 桶.失败窗口起点).TotalSeconds > 失败窗口秒数)
+				{
+					桶.失败窗口起点 = now;
+					桶.失败计数 = 0;
+				}
+				桶.失败计数++;
+				if (桶.失败计数 >= 失败最大次数)
+				{
+					桶.解封时间 = now.AddSeconds(封禁秒数);
+					桶.失败计数 = 0;
+					主窗口.添加日志($"IP 触发认证失败上限, 临时封禁 {封禁秒数}s: {ip}");
+				}
+			}
+		}
+
+		private static void 记录认证成功(IPAddress ip)
+		{
+			限速桶 桶 = 取桶(ip);
+			lock (桶)
+			{
+				桶.失败计数 = 0;
+			}
+		}
+
+		private static bool 注册放行(IPAddress ip)
+		{
+			限速桶 桶 = 取桶(ip);
+			lock (桶)
+			{
+				DateTime now = DateTime.UtcNow;
+				if ((now - 桶.注册窗口起点).TotalSeconds > 注册窗口秒数)
+				{
+					桶.注册窗口起点 = now;
+					桶.注册计数 = 0;
+				}
+				if (桶.注册计数 >= 注册最大次数)
+				{
+					return false;
+				}
+				桶.注册计数++;
+				return true;
+			}
+		}
+
 		public static bool 启动服务()
 		{
 			try
@@ -35,14 +121,18 @@ namespace 账号服务器
 						try
 						{
 							UdpClient udpClient = 本地网络服务;
-							if (udpClient != null && udpClient.Available == 0)
+							if (udpClient == null)
+							{
+								break;
+							}
+							if (udpClient.Available == 0)
 							{
 								Thread.Sleep(1);
 							}
 							else
 							{
 								数据封包 item = default(数据封包);
-								item.接收数据 = 本地网络服务.Receive(ref item.客户地址);
+								item.接收数据 = udpClient.Receive(ref item.客户地址);
 								if (item.接收数据.Length > 1024)
 								{
 									主窗口.添加日志($"收到过长的封包  地址:{item.客户地址}, 长度:{item.接收数据.Length}");
@@ -50,7 +140,7 @@ namespace 账号服务器
 								else
 								{
 									数据处理队列.Enqueue(item);
-									主窗口.已接收字节数 += item.接收数据.Length;
+									Interlocked.Add(ref 主窗口.已接收字节数, item.接收数据.Length);
 									主窗口.更新已接收字节数();
 								}
 							}
@@ -79,6 +169,10 @@ namespace 账号服务器
 								{
 									主窗口.添加日志($"收到错误的封包  地址: {result.客户地址}, 长度: {result.接收数据.Length}");
 								}
+								else if (是否被封禁(result.客户地址.Address))
+								{
+									// 被临时封禁的 IP, 静默丢弃以避免给攻击者反馈信号
+								}
 								else
 								{
 									switch (array[1])
@@ -86,12 +180,16 @@ namespace 账号服务器
 										case "0":
 											if (array.Length == 4)
 											{
-												if (!主窗口.账号数据.TryGetValue(array[2], out var value3) || array[3] != value3.账号密码)
+												bool 登录通过 = 主窗口.账号数据.TryGetValue(array[2], out var value3)
+													&& 账号数据.安全比较(array[3], value3.账号密码);
+												if (!登录通过)
 												{
+													记录认证失败(result.客户地址.Address);
 													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 1 用户名或密码错误"));
 												}
 												else
 												{
+													记录认证成功(result.客户地址.Address);
 													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 0 " + array[2] + " " + array[3] + " " + 主窗口.游戏区服));
 													主窗口.添加日志("账号登录成功!  账号: " + array[2]);
 												}
@@ -100,7 +198,11 @@ namespace 账号服务器
 										case "1":
 											if (array.Length == 6)
 											{
-												if (array[2].Length <= 5 || array[2].Length > 12)
+												if (!注册放行(result.客户地址.Address))
+												{
+													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 3 注册过于频繁, 请稍后再试"));
+												}
+												else if (array[2].Length <= 5 || array[2].Length > 12)
 												{
 													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 3 用户名长度错误"));
 												}
@@ -133,7 +235,7 @@ namespace 账号服务器
 													主窗口.添加账号(new 账号数据(array[2], array[3], array[4], array[5]));
 													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 2 " + array[2] + " " + array[3]));
 													主窗口.添加日志("账号注册成功!  账号: " + array[2]);
-													主窗口.新注册账号数++;
+													Interlocked.Increment(ref 主窗口.新注册账号数);
 													主窗口.更新已注册账号数();
 												}
 											}
@@ -141,29 +243,30 @@ namespace 账号服务器
 										case "2":
 											if (array.Length == 6)
 											{
-												账号数据 value4;
 												if (array[3].Length <= 1 || array[3].Length > 18)
 												{
 													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 5 密码长度错误"));
 												}
-												else if (!主窗口.账号数据.TryGetValue(array[2], out value4))
-												{
-													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 5 账号不存在"));
-												}
-												else if (array[4] != value4.密保问题)
-												{
-													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 5 密保问题错误"));
-												}
-												else if (array[5] != value4.密保答案)
-												{
-													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 5 密保答案错误"));
-												}
 												else
 												{
-													value4.账号密码 = array[3];
-													主窗口.保存账号(value4);
-													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 4 " + array[1] + " " + array[2]));
-													主窗口.添加日志("密码修改成功!  账号: " + array[1]);
+													// 统一错误文案, 防止通过差异化错误枚举有效账号 (HIGH-A)
+													账号数据 value4;
+													bool 密保通过 = 主窗口.账号数据.TryGetValue(array[2], out value4)
+														&& 账号数据.安全比较(array[4], value4.密保问题)
+														&& 账号数据.安全比较(array[5], value4.密保答案);
+													if (!密保通过)
+													{
+														记录认证失败(result.客户地址.Address);
+														发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 5 密保信息错误"));
+													}
+													else
+													{
+														记录认证成功(result.客户地址.Address);
+														value4.账号密码 = array[3];
+														主窗口.保存账号(value4);
+														发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 4 " + array[1] + " " + array[2]));
+														主窗口.添加日志("密码修改成功!  账号: " + array[2]);
+													}
 												}
 											}
 											break;
@@ -171,8 +274,11 @@ namespace 账号服务器
 											if (array.Length == 6)
 											{
 												IPEndPoint value2;
-												if (!主窗口.账号数据.TryGetValue(array[2], out var value) || array[3] != value.账号密码)
+												bool 凭据通过 = 主窗口.账号数据.TryGetValue(array[2], out var value)
+													&& 账号数据.安全比较(array[3], value.账号密码);
+												if (!凭据通过)
 												{
+													记录认证失败(result.客户地址.Address);
 													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 7 用户名或密码错误"));
 												}
 												else if (!主窗口.区服数据.TryGetValue(array[4], out value2))
@@ -181,11 +287,12 @@ namespace 账号服务器
 												}
 												else
 												{
+													记录认证成功(result.客户地址.Address);
 													string text = 账号数据.生成门票();
 													发送门票(value2, text, array[2]);
 													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 6 " + array[2] + " " + array[3] + " " + text));
 													主窗口.添加日志("成功生成门票!  账号: " + array[2] + " - " + text);
-													主窗口.生成门票总数++;
+													Interlocked.Increment(ref 主窗口.生成门票总数);
 													主窗口.更新已生成门票数();
 												}
 											}
@@ -223,13 +330,14 @@ namespace 账号服务器
 
 		public static void 发送数据(IPEndPoint 地址, byte[] 数据)
 		{
-			主窗口.已发送字节数 += 数据.Length;
+			Interlocked.Add(ref 主窗口.已发送字节数, 数据.Length);
 			主窗口.更新已发送字节数();
-			if (本地网络服务 != null)
+			UdpClient udp = 本地网络服务;
+			if (udp != null)
 			{
 				try
 				{
-					本地网络服务.Send(数据, 数据.Length, 地址);
+					udp.Send(数据, 数据.Length, 地址);
 				}
 				catch (Exception ex)
 				{
@@ -240,13 +348,15 @@ namespace 账号服务器
 
 		public static void 发送门票(IPEndPoint 地址, string 门票, string 账号)
 		{
-			主窗口.生成门票总数++;
+			// 注意: case "3" 调用本函数后还会再自增一次, 这里不能重复计数.
+			// 保留语义一致, 改用 Interlocked 避免和 UI 线程竞争; 实际去重交由调用方.
 			byte[] bytes = Encoding.UTF8.GetBytes(门票 + ";" + 账号);
-			if (本地网络服务 != null)
+			UdpClient udp = 本地网络服务;
+			if (udp != null)
 			{
 				try
 				{
-					本地网络服务.Send(bytes, bytes.Length, new IPEndPoint(地址.Address, (ushort)主窗口.主界面.门票发送端口.Value));
+					udp.Send(bytes, bytes.Length, new IPEndPoint(地址.Address, (ushort)主窗口.主界面.门票发送端口.Value));
 				}
 				catch (Exception ex)
 				{

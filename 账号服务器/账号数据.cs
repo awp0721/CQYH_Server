@@ -1,11 +1,23 @@
 using System;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace 账号服务器
 {
 	public sealed class 账号数据
 	{
 		private static readonly RandomNumberGenerator 安全随机 = RandomNumberGenerator.Create();
+
+		// 常量时间字符串比较, 防止密码/密保答案被时序攻击逐字节还原.
+		// 长度不同直接返回 false (长度本身不构成可放大的口令信息泄漏).
+		public static bool 安全比较(string a, string b)
+		{
+			if (a == null || b == null) return false;
+			byte[] ba = Encoding.UTF8.GetBytes(a);
+			byte[] bb = Encoding.UTF8.GetBytes(b);
+			if (ba.Length != bb.Length) return false;
+			return CryptographicOperations.FixedTimeEquals(ba, bb);
+		}
 
 		private static char[] RandomChars = new char[62]
 		{

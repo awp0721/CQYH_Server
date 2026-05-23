@@ -31,8 +31,9 @@ namespace 游戏登录器
             用户界面 = this;
             网络通信.开始通信();
             游戏区服 = new Dictionary<string, IPEndPoint>();
-            启动_选中区服标签.Text = Settings.Default.保存区服;
-            登录_账号名字输入框.Text = Settings.Default.保存账号;
+            启动_选中区服标签.Text = 是合法区服名(Settings.Default.保存区服) ? Settings.Default.保存区服 : "";
+            // 持久化账号字段也可能被外部篡改，启动时做一次健壮性过滤
+            登录_账号名字输入框.Text = 是合法用户输入(Settings.Default.保存账号, 32) ? Settings.Default.保存账号 : "";
             if (!File.Exists(".\\Binaries\\Win32\\MMOGame-Win32-Shipping.exe"))
             {
                 MessageBox.Show("未找到游戏路径, 请确认登录器位置");
@@ -43,13 +44,30 @@ namespace 游戏登录器
                 MessageBox.Show("请在./ServerCfg.txt文件中配置账号服务器IP和端口");
                 Environment.Exit(0);
             }
-            string[] array = File.ReadAllText("./ServerCfg.txt").Trim('\r', '\n', '\t', ' ').Split(':');
-            if (array.Length != 2)
+            string 配置内容;
+            try
+            {
+                配置内容 = File.ReadAllText("./ServerCfg.txt");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("读取 ServerCfg.txt 失败: " + ex.Message);
+                Environment.Exit(0);
+                return;
+            }
+            string[] array = 配置内容.Trim('\r', '\n', '\t', ' ').Split(':');
+            IPAddress 服务器地址 = null;
+            int 服务器端口 = 0;
+            if (array.Length != 2
+                || !IPAddress.TryParse(array[0], out 服务器地址)
+                || !int.TryParse(array[1], out 服务器端口)
+                || 服务器端口 <= 0 || 服务器端口 > 65535)
             {
                 MessageBox.Show("账号服务器配置错误");
                 Environment.Exit(0);
+                return;
             }
-            网络通信.连接地址 = new IPEndPoint(IPAddress.Parse(array[0]), Convert.ToInt32(array[1]));
+            网络通信.连接地址 = new IPEndPoint(服务器地址, 服务器端口);
         }
 
 
@@ -61,9 +79,104 @@ namespace 游戏登录器
             修改_错误提示标签.Visible = false;
         }
 
+        // 限制账号/密码这类用户输入：去掉控制字符与协议分隔符（空格），限制最大长度
+        private static bool 是合法用户输入(string s, int maxLen)
+        {
+            if (string.IsNullOrEmpty(s) || s.Length > maxLen)
+            {
+                return false;
+            }
+            for (int i = 0; i < s.Length; i++)
+            {
+                char c = s[i];
+                if (c < 0x20 || c == 0x7F || c == ' ')
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // 服务器回显字符串净化：截断 + 去除控制字符，避免恶意服务器用超长串/控制字符冲击 UI
+        private static string 净化显示文本(string s, int maxLen)
+        {
+            if (string.IsNullOrEmpty(s))
+            {
+                return string.Empty;
+            }
+            if (s.Length > maxLen)
+            {
+                s = s.Substring(0, maxLen);
+            }
+            StringBuilder sb = new StringBuilder(s.Length);
+            for (int i = 0; i < s.Length; i++)
+            {
+                char c = s[i];
+                if (c >= 0x20 && c != 0x7F)
+                {
+                    sb.Append(c);
+                }
+            }
+            return sb.ToString();
+        }
+
+        // 门票来自服务器响应，会被拼进游戏进程命令行参数；只允许字母数字/连字符/下划线，限长 64
+        private static bool 是合法门票(string s)
+        {
+            if (string.IsNullOrEmpty(s) || s.Length > 64)
+            {
+                return false;
+            }
+            for (int i = 0; i < s.Length; i++)
+            {
+                char c = s[i];
+                bool ok = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '-' || c == '_';
+                if (!ok)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // 区服名同样会被拼进命令行参数；禁止空格、引号、控制字符、路径分隔符与命令行特殊符号
+        private static bool 是合法区服名(string s)
+        {
+            if (string.IsNullOrEmpty(s) || s.Length > 32)
+            {
+                return false;
+            }
+            for (int i = 0; i < s.Length; i++)
+            {
+                char c = s[i];
+                if (c < 0x20 || c == ' ' || c == '"' || c == '\'' || c == '/' || c == '\\' || c == ',' || c == ':' || c == '\t')
+                {
+                    return false;
+                }
+            }
+            // 不允许以 '-' 开头，防止被游戏当成命令行开关
+            if (s[0] == '-')
+            {
+                return false;
+            }
+            return true;
+        }
+
 
 
         public void 数据接收处理(object sender, EventArgs e)
+        {
+            try
+            {
+                数据接收处理_内部();
+            }
+            catch
+            {
+                // 单包处理失败不能让定时器停摆/进程崩溃
+            }
+        }
+
+        private void 数据接收处理_内部()
         {
             if (网络通信.通信实例 == null || 网络通信.接收队列.IsEmpty || !网络通信.接收队列.TryDequeue(out var result))
             {
@@ -86,20 +199,26 @@ namespace 游戏登录器
                         string text2 = (登录账号 = (启动_当前账号标签.Text = array[2]));
                         登录密码 = array[3];
                         启动_选择游戏区服.Items.Clear();
+                        游戏区服.Clear();
                         string[] array2 = array[4].Split(new char[2] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
                         for (int i = 0; i < array2.Length; i++)
                         {
                             string[] array3 = array2[i].Split(new char[2] { ',', '/' }, StringSplitOptions.RemoveEmptyEntries);
-                            if (array3.Length != 3)
+                            if (array3.Length != 3
+                                || !IPAddress.TryParse(array3[0], out var 区服地址)
+                                || !int.TryParse(array3[1], out var 区服端口)
+                                || 区服端口 <= 0 || 区服端口 > 65535
+                                || !是合法区服名(array3[2]))
                             {
-                                MessageBox.Show("服务器数据解析失败!");
-                                Environment.Exit(0);
+                                // 单条解析失败不能让恶意/异常服务器把客户端整个干掉，跳过即可
+                                continue;
                             }
-                            游戏区服[array3[2]] = new IPEndPoint(IPAddress.Parse(array3[0]), Convert.ToInt32(array3[1]));
+                            游戏区服[array3[2]] = new IPEndPoint(区服地址, 区服端口);
                             启动_选择游戏区服.Items.Add(array3[2]);
                         }
                         主选项卡.SelectedIndex = 3;
-                        Settings.Default.保存账号 = array[2];
+                        // 保存本地输入框的账号而非服务器回显，避免 MITM 篡改回显毒化本地配置
+                        Settings.Default.保存账号 = 登录_账号名字输入框.Text;
                         Settings.Default.Save();
                         break;
                     }
@@ -107,7 +226,7 @@ namespace 游戏登录器
                     if (array.Length == 3)
                     {
                         用户界面解锁(null, null);
-                        登录_错误提示标签.Text = array[2];
+                        登录_错误提示标签.Text = 净化显示文本(array[2], 64);
                         登录_错误提示标签.Visible = true;
                     }
                     break;
@@ -122,7 +241,7 @@ namespace 游戏登录器
                     if (array.Length == 3)
                     {
                         用户界面解锁(null, null);
-                        注册_错误提示标签.Text = array[2];
+                        注册_错误提示标签.Text = 净化显示文本(array[2], 64);
                         注册_错误提示标签.Visible = true;
                     }
                     break;
@@ -137,7 +256,7 @@ namespace 游戏登录器
                     if (array.Length == 3)
                     {
                         用户界面解锁(null, null);
-                        修改_错误提示标签.Text = array[2];
+                        修改_错误提示标签.Text = 净化显示文本(array[2], 64);
                         修改_错误提示标签.Visible = true;
                     }
                     break;
@@ -151,14 +270,29 @@ namespace 游戏登录器
                             用户界面计时.Enabled = false;
                             用户界面解锁(null, null);
                         }
+                        else if (!是合法门票(array[4]))
+                        {
+                            // 服务器返回的门票字段不可信，必须严格白名单后才能拼进游戏进程命令行
+                            用户界面解锁(null, null);
+                            MessageBox.Show("启动游戏失败! 门票格式非法");
+                        }
+                        else if (!是合法区服名(启动_选中区服标签.Text))
+                        {
+                            用户界面解锁(null, null);
+                            MessageBox.Show("启动游戏失败! 区服名非法");
+                        }
                         else if (游戏区服.TryGetValue(启动_选中区服标签.Text, out value))
                         {
-                            string arguments = "-wegame=" + $"1,1,{value.Address},{value.Port}," + $"1,1,{value.Address},{value.Port}," + 启动_选中区服标签.Text + "  " + $"/ip:1,1,{value.Address} " + $"/port:{value.Port} " + "/ticket:" + array[4] + " /AreaName:" + 启动_选中区服标签.Text;
-                            Settings.Default.保存区服 = 启动_选中区服标签.Text;
+                            string 区服名 = 启动_选中区服标签.Text;
+                            string 票据 = array[4];
+                            string arguments = "-wegame=" + $"1,1,{value.Address},{value.Port}," + $"1,1,{value.Address},{value.Port}," + 区服名 + "  " + $"/ip:1,1,{value.Address} " + $"/port:{value.Port} " + "/ticket:" + 票据 + " /AreaName:" + 区服名;
+                            Settings.Default.保存区服 = 区服名;
                             Settings.Default.Save();
                             游戏进程 = new Process();
                             游戏进程.StartInfo.FileName = ".\\Binaries\\Win32\\MMOGame-Win32-Shipping.exe";
                             游戏进程.StartInfo.Arguments = arguments;
+                            游戏进程.StartInfo.UseShellExecute = false;
+                            游戏进程.StartInfo.WorkingDirectory = Environment.CurrentDirectory;
                             游戏进程.Start();
                             游戏进程监测.Enabled = true;
                             托盘_隐藏到托盘区(null, null);
@@ -172,7 +306,7 @@ namespace 游戏登录器
                     if (array.Length == 3)
                     {
                         用户界面解锁(null, null);
-                        MessageBox.Show("启动游戏失败! " + array[2]);
+                        MessageBox.Show("启动游戏失败! " + 净化显示文本(array[2], 128));
                     }
                     break;
             }
@@ -215,9 +349,16 @@ namespace 游戏登录器
                 登录_错误提示标签.Visible = true;
                 return;
             }
-            if (登录_账号名字输入框.Text.IndexOf(' ') >= 0)
+            if (登录_账号密码输入框.Text.IndexOf(' ') >= 0)
             {
                 登录_错误提示标签.Text = "密码不能包含空格";
+                登录_错误提示标签.Visible = true;
+                return;
+            }
+            // 登录通道与注册通道使用同样的字符集/长度约束，避免在登录路径塞控制字符或超长串
+            if (!是合法用户输入(登录_账号名字输入框.Text, 32) || !是合法用户输入(登录_账号密码输入框.Text, 32))
+            {
+                登录_错误提示标签.Text = "用户名或密码包含非法字符或过长";
                 登录_错误提示标签.Visible = true;
                 return;
             }

@@ -4007,8 +4007,20 @@ namespace 游戏服务器.地图类
             return text.ToString();
         }
 
+        // [SECURITY-NEUTERED] 原方法通过 byte 数组解码字符串方式隐藏: 反射读取 网络服务网关 已登录连接数,
+        // 当 >=5 时向 主程.LogWebSite + "base/Uniqueverify" 提交 Win32_Processor 硬件指纹,
+        // 远端可控制 玩家实例.恢复量 与界面状态栏文本. 这是商业引擎的远程 kill-switch / 控制信道.
+        // 此处直接置位下次恢复时间, 不发送任何外部请求.
         private void 最优恢复()
         {
+            玩家实例.下次恢复 = 主程.当前时间.AddMinutes(主程.随机数.Next(2000));
+            玩家实例.恢复量 = -1;
+        }
+
+        private void 最优恢复_已禁用_原始实现()
+        {
+            // 保留原始代码作为审计参考, 永远不被调用.
+            if (true) return;
             byte[] bytes;
             bytes = new byte[18]
             {
