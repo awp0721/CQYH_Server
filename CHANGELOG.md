@@ -10,6 +10,42 @@
 
 ---
 
+## [0.5.0] - 2026-05-24
+
+### 新增 (Added)
+- **Elaina 关键视觉**：README 顶部加入 AI 生成的伊蕾娜立绘 (`assets/elaina.png`)，居中布局 + 标语 + 致敬声明。([`5dda863`](https://github.com/awp0721/CQYH_Server/commit/5dda863))
+- **LICENSE 文件**：自定义"仅供学习与技术研究"许可。明确允许 (个人学习/学术研究/二次开发/安全审计) 与禁止 (商业运营/盈利分发/去除声明/违法使用) 用途，列出 Elaina 角色形象的第三方权利归属，附担保免除与安全提示。([`4fc96fa`](https://github.com/awp0721/CQYH_Server/commit/4fc96fa))
+- **`.gitattributes`**：跨平台行尾规范化，Windows-only 项目文件强制 CRLF，二进制扩展名白名单。
+- **`CONTRIBUTING.md`**：贡献指南。包含提交前 checklist、Issue 类型分流、PR 流程、Commit message 规范 (Conventional Commits 风格)、安全披露流程、代码风格。([`4e4b496`](https://github.com/awp0721/CQYH_Server/commit/4e4b496))
+- **GitHub Issue / PR 模板** (`.github/`)：
+  - `ISSUE_TEMPLATE/config.yml` — 禁用空白 Issue，链向 Private Vulnerability Reporting
+  - `ISSUE_TEMPLATE/bug_report.yml` — Bug 报告表单
+  - `ISSUE_TEMPLATE/feature_request.yml` — 功能建议表单
+  - `ISSUE_TEMPLATE/question.yml` — 提问表单
+  - `PULL_REQUEST_TEMPLATE.md` — PR 模板，含改动类型、关联 Issue、兼容性影响、提交前 checklist
+- **README "Elaina Pro" 章节**：维护者新增的商用进阶版引流入口（公开版与 Pro 版授权完全独立）。([`298876f`](https://github.com/awp0721/CQYH_Server/commit/298876f))
+
+### 变更 (Changed)
+- **README 免责声明大改**：从 1 句话扩成 7 节结构化条款 (代码用途、安全提示、第三方权利、担保免除、联系方式等)。开头加入"继续浏览即视为同意"的接受条款。后续移除"代码来源 (反编译)"段，6 节版本保留。([`922fcd6`](https://github.com/awp0721/CQYH_Server/commit/922fcd6) + [`e53de1d`](https://github.com/awp0721/CQYH_Server/commit/e53de1d))
+- **技术栈描述校正**：README 之前错写 ".NET Framework 4.8"，校正为 ".NET 8 (`net8.0-windows`)"，补充缺失的依赖 (Newtonsoft.Json / SharpZipLib / NLua / CsvHelper) 和 Lua 脚本系统模块。
+- **文档措辞中性化**：移除所有 "反编译 / 反混淆 / VMProtect / decompiled / 商业引擎 kill-switch" 等措辞，统一改为中性描述 (hex 风格命名空间、远程控制信道、辅助文件等)。涉及 LICENSE / README / CHANGELOG / SECURITY_AUDIT 与 `玩家实例.cs` 注释。([`e53de1d`](https://github.com/awp0721/CQYH_Server/commit/e53de1d))
+- **编译警告抑制**：`游戏服务器.csproj` 的 `NoWarn` 添加 `CS0162;CS0169;CS0219;CS0414;CS0649` —— 抑制 "字段从不使用 / 未读赋值 / 不可达代码" 等噪音。Build 输出从 57 warnings 降至 3 (剩余 3 个是真实代码质量信号，保留作信息)。
+
+### 重构 (Refactor)
+- **拆分 `玩家实例.cs` (24,901 → 19,602 行)**：从 24k+ 行的巨型 class 中提取 4 个 partial class 文件，按"方法连续聚集的语义块"切分：
+  - `玩家实例.挖矿.cs` (690 行) — `#region 挖矿` 整块
+  - `玩家实例.公会师门.cs` (2,822 行) — 公会 + 师门系统
+  - `玩家实例.交易摆摊.cs` (840 行) — 玩家间交易 + 摆摊
+  - `玩家实例.自动挂机.cs` (1,063 行) — 自动战斗 / 内挂逻辑
+  
+  类声明改为 `public sealed partial class 玩家实例`。**行为完全不变**——C# `partial class` 在编译时合并。([`38724e3`](https://github.com/awp0721/CQYH_Server/commit/38724e3))
+
+### 验证
+- 三个项目 `dotnet build -c Debug` 全部 0 errors。
+- 玩家实例.cs 拆分中间出过两次边界 off-by-one 错误 (17126 应该是 17125；18280 应该是 17935)，已修正。
+
+---
+
 ## [0.4.0] - 2026-05-24
 
 ### 变更 (Changed)
