@@ -10794,9 +10794,9 @@ namespace 游戏服务器.地图类
                 if (this.玩家学习技能(item.技能编号, 0))
                 {
                     this.消耗背包物品(1, item, "学习技能扣除");
-                    if (item.HasProp(游戏服务器.物品使用属性.坐骑编号))
+                    if (item.HasProp(游戏服务器.模板类.物品使用属性.坐骑编号))
                     {
-                        this.获得坐骑((byte)item.GetProp(游戏服务器.物品使用属性.坐骑编号));
+                        this.获得坐骑((byte)item.GetProp(游戏服务器.模板类.物品使用属性.坐骑编号));
                     }
                 }
                 return true;
@@ -10839,15 +10839,15 @@ namespace 游戏服务器.地图类
                     flag = this.ProcessConsumableStack(item);
                     break;
                 case 物品使用类型.增加元宝:
-                    this.修改货币("+", 游戏货币.元宝, (uint)item.GetProp(游戏服务器.物品使用属性.货币数量, 100));
-                    主程.添加货币日志(this, "玩家使用物品", 游戏货币.元宝, item.GetProp(游戏服务器.物品使用属性.货币数量, 100));
+                    this.修改货币("+", 游戏货币.元宝, (uint)item.GetProp(游戏服务器.模板类.物品使用属性.货币数量, 100));
+                    主程.添加货币日志(this, "玩家使用物品", 游戏货币.元宝, item.GetProp(游戏服务器.模板类.物品使用属性.货币数量, 100));
                     flag = true;
                     break;
                 case 物品使用类型.城镇传送:
                     flag = this.ProcessConsumableTownTeleport(item);
                     break;
                 case 物品使用类型.祝福油:
-                    flag = this.ProcessConsumableBlessing(item, (byte)item.GetProp(游戏服务器.物品使用属性.固定几率));
+                    flag = this.ProcessConsumableBlessing(item, (byte)item.GetProp(游戏服务器.模板类.物品使用属性.固定几率));
                     break;
                 case 物品使用类型.切换铭文:
                     flag = this.ProcessConsumableSwitchSkill(item);
@@ -20333,6 +20333,17 @@ namespace 游戏服务器.地图类
 
         public void 寄售下架物品(uint 订单编号)
         {
+            寄售数据 寄售;
+            寄售 = 寄售数据.获取寄售(订单编号);
+            if (寄售 == null)
+            {
+                return;
+            }
+            if (寄售.卖方玩家.V != this.角色数据)
+            {
+                this.网络连接?.尝试断开连接(new Exception("错误操作: 寄售下架物品, 错误: 非卖家本人"));
+                return;
+            }
             寄售数据.发送商品(订单编号);
         }
 

@@ -327,24 +327,25 @@ namespace 游戏登录器
             {
                 case "0":
                     {
-                        if (array.Length != 5)
+                        // MED-E: 服务器不再回显密码, 登录成功响应长度由 5 → 4 (区服列表在 array[3]).
+                        if (array.Length != 4)
                         {
                             break;
                         }
                         用户界面解锁(null, null);
-                        // 不信任服务器回显：账号必须合法、回显的密码字段必须是 64-char hex 哈希,
-                        // 否则后续会被拼进进入游戏的请求包里把脏字符塞出去
-                        if (!是合法用户输入(array[2], 32) || !是合法密码哈希(array[3]))
+                        // 服务器回显的账号必须与发包前缓存的一致, 否则视为篡改/会话错位
+                        if (!是合法用户输入(array[2], 32)
+                            || string.IsNullOrEmpty(登录账号)
+                            || array[2] != 登录账号)
                         {
                             登录_错误提示标签.Text = "服务器响应格式异常";
                             登录_错误提示标签.Visible = true;
                             break;
                         }
-                        string text2 = (登录账号 = (启动_当前账号标签.Text = array[2]));
-                        登录密码 = array[3];
+                        启动_当前账号标签.Text = 登录账号;
                         启动_选择游戏区服.Items.Clear();
                         游戏区服.Clear();
-                        string[] array2 = array[4].Split(new char[2] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                        string[] array2 = array[3].Split(new char[2] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
                         for (int i = 0; i < array2.Length; i++)
                         {
                             string[] array3 = array2[i].Split(new char[2] { ',', '/' }, StringSplitOptions.RemoveEmptyEntries);
@@ -375,7 +376,8 @@ namespace 游戏登录器
                     }
                     break;
                 case "2":
-                    if (array.Length == 4)
+                    // MED-E: 服务器不再回显密码, 注册成功响应长度由 4 → 3.
+                    if (array.Length == 3)
                     {
                         用户界面解锁(null, null);
                         MessageBox.Show("账号注册成功");
@@ -405,7 +407,8 @@ namespace 游戏登录器
                     }
                     break;
                 case "6":
-                    if (array.Length == 5)
+                    // MED-E: 服务器不再回显密码, 门票响应长度由 5 → 4, 票据在 array[3].
+                    if (array.Length == 4)
                     {
                         IPEndPoint value;
                         if (!File.Exists(".\\Binaries\\Win32\\MMOGame-Win32-Shipping.exe"))
@@ -414,7 +417,7 @@ namespace 游戏登录器
                             用户界面计时.Enabled = false;
                             用户界面解锁(null, null);
                         }
-                        else if (!是合法门票(array[4]))
+                        else if (!是合法门票(array[3]))
                         {
                             // 服务器返回的门票字段不可信，必须严格白名单后才能拼进游戏进程命令行
                             用户界面解锁(null, null);
@@ -435,7 +438,7 @@ namespace 游戏登录器
                                 break;
                             }
                             string 区服名 = 启动_选中区服标签.Text;
-                            string 票据 = array[4];
+                            string 票据 = array[3];
                             string arguments = "-wegame=" + $"1,1,{value.Address},{value.Port}," + $"1,1,{value.Address},{value.Port}," + 区服名 + "  " + $"/ip:1,1,{value.Address} " + $"/port:{value.Port} " + "/ticket:" + 票据 + " /AreaName:" + 区服名;
                             Settings.Default.保存区服 = 加密本地字符串(区服名);
                             Settings.Default.Save();
@@ -521,8 +524,11 @@ namespace 游戏登录器
                 登录_错误提示标签.Visible = true;
                 return;
             }
-            string 登录_密码哈希 = 密码哈希(登录_账号名字输入框.Text, 登录_账号密码输入框.Text);
-            if (网络通信.发送数据(Encoding.UTF8.GetBytes($"{下一包号()} 0 " + 登录_账号名字输入框.Text + " " + 登录_密码哈希)))
+            // 发包前先把账号 + 哈希存到静态字段, 服务端不再回显这两个字段:
+            // 收到 case "0" 时直接复用这里固化的凭据, 后续进入游戏请求也用 登录密码 (= hash).
+            登录账号 = 登录_账号名字输入框.Text;
+            登录密码 = 密码哈希(登录_账号名字输入框.Text, 登录_账号密码输入框.Text);
+            if (网络通信.发送数据(Encoding.UTF8.GetBytes($"{下一包号()} 0 " + 登录账号 + " " + 登录密码)))
             {
                 用户界面锁定();
             }

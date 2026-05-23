@@ -19,6 +19,64 @@ namespace 账号服务器
 			return CryptographicOperations.FixedTimeEquals(ba, bb);
 		}
 
+		// 协议 v2: 客户端发包前对密码做 SHA256("YH-Auth-v2:" || 账号 || ":" || 明文) 形成 64-char hex.
+		// 服务端校验: 旧账号 (持久化字段为明文) 用此函数算出"期望哈希"再与客户端发的哈希做常量时间比较;
+		// 新账号 (持久化字段已是 64-char hex) 直接和客户端发的哈希比较.
+		// 两端实现必须一致, 客户端见 游戏登录器/登录界面.cs 同名实现.
+		public static string 密码哈希(string 账号, string 明文密码)
+		{
+			byte[] bytes = Encoding.UTF8.GetBytes("YH-Auth-v2:" + 账号 + ":" + 明文密码);
+			byte[] hash = SHA256.HashData(bytes);
+			StringBuilder sb = new StringBuilder(hash.Length * 2);
+			for (int i = 0; i < hash.Length; i++)
+			{
+				sb.Append(hash[i].ToString("x2"));
+			}
+			return sb.ToString();
+		}
+
+		// 判断字符串是否为合法的 64 char 小写 hex (即 v2 协议的密码哈希格式)
+		public static bool 是哈希格式(string s)
+		{
+			if (string.IsNullOrEmpty(s) || s.Length != 64)
+			{
+				return false;
+			}
+			for (int i = 0; i < s.Length; i++)
+			{
+				char c = s[i];
+				bool ok = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+				if (!ok)
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
+		// 通用密码校验: 自动兼容存储为明文 (历史数据) 或 hash (v2 协议) 的账号.
+		// 客户端传来的字段必须是 hash. 返回 true 表示匹配;
+		// out 需要升级存储 表示该账号目前还是明文存储, 校验通过后调用方应保存为 hash 格式.
+		public static bool 校验客户端哈希(账号数据 账号, string 客户端哈希, out bool 需要升级存储)
+		{
+			需要升级存储 = false;
+			if (账号 == null || !是哈希格式(客户端哈希))
+			{
+				return false;
+			}
+			if (是哈希格式(账号.账号密码))
+			{
+				return 安全比较(客户端哈希, 账号.账号密码);
+			}
+			string 期望 = 密码哈希(账号.账号名字, 账号.账号密码);
+			if (安全比较(客户端哈希, 期望))
+			{
+				需要升级存储 = true;
+				return true;
+			}
+			return false;
+		}
+
 		// 强密码: 必须至少包含 2 种字符类别 (小写/大写/数字/特殊).
 		// 拦掉 "123456" "abcdef" "ABCDEF" 这类极弱口令 (MISC-02).
 		public static bool 是强密码(string pwd)

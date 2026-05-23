@@ -26,13 +26,13 @@ namespace 游戏服务器.管理命令
                     玩家.发送系统消息("无法对自己操作");
                     return;
                 }
-                if (this.元宝数量 == 0)
+                if (this.元宝数量 == 0 || this.元宝数量 > uint.MaxValue / 100u)
                 {
                     玩家.发送系统消息("错误的数值信息");
                     return;
                 }
                 uint num;
-                num = this.元宝数量 * 100;
+                num = this.元宝数量 * 100u;
                 if (玩家.元宝数量 < num)
                 {
                     玩家.发送系统消息("元宝不足");

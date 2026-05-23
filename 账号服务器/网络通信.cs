@@ -251,8 +251,10 @@ namespace 账号服务器
 										case "0":
 											if (array.Length == 4)
 											{
+												// PROTO-01 v2: 客户端发来的 array[3] 必须是 64-char hex hash.
+												// 兼容历史明文账号: 校验通过且当前还是明文存储时, 把存储升级为 hash.
 												bool 登录通过 = 主窗口.账号数据.TryGetValue(array[2], out var value3)
-													&& 账号数据.安全比较(array[3], value3.账号密码);
+													&& 账号数据.校验客户端哈希(value3, array[3], out bool 需要升级登录);
 												if (!登录通过)
 												{
 													记录认证失败(result.客户地址.Address);
@@ -260,8 +262,14 @@ namespace 账号服务器
 												}
 												else
 												{
+													if (需要升级登录 && 主窗口.写盘许可())
+													{
+														value3.账号密码 = array[3];
+														try { 主窗口.保存账号(value3); }
+														catch (Exception ex升级) { 主窗口.添加日志("升级密码存储失败: " + ex升级.Message); }
+													}
 													记录认证成功(result.客户地址.Address);
-													// MED-E: 不再回显密码, 客户端保留输入框输入即可.
+													// PROTO-01: 不再回显密码哈希, 客户端发包前已自行缓存
 													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 0 " + array[2] + " " + 主窗口.游戏区服));
 													主窗口.添加日志("账号登录成功!  账号: " + array[2]);
 												}
