@@ -22,7 +22,7 @@ using DevExpress.XtraTreeList;
 using DevExpress.XtraTreeList.Columns;
 using DevExpress.XtraVerticalGrid;
 
-namespace 窗口视图
+namespace 游戏服务器.窗口视图
 {
 	public class MonsterView : RibbonForm
 	{
@@ -265,7 +265,7 @@ namespace 窗口视图
 		private void InitializeComponent()
 		{
 			System.ComponentModel.ComponentResourceManager resources;
-			resources = new System.ComponentModel.ComponentResourceManager(typeof(窗口视图.MonsterView));
+			resources = new System.ComponentModel.ComponentResourceManager(typeof(游戏服务器.窗口视图.MonsterView));
 			this.ribbon = new DevExpress.XtraBars.Ribbon.RibbonControl();
 			this.barButtonItem1 = new DevExpress.XtraBars.BarButtonItem();
 			this.ReLoadDataBaseButton = new DevExpress.XtraBars.BarButtonItem();

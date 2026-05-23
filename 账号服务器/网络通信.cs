@@ -254,7 +254,7 @@ namespace 账号服务器
 												// PROTO-01 v2: 客户端发来的 array[3] 必须是 64-char hex hash.
 												// 兼容历史明文账号: 校验通过且当前还是明文存储时, 把存储升级为 hash.
 												bool 登录通过 = 主窗口.账号数据.TryGetValue(array[2], out var value3)
-													&& 账号数据.校验客户端哈希(value3, array[3], out bool 需要升级登录);
+													&& 账号数据.安全比较(array[3], value3.账号密码);
 												if (!登录通过)
 												{
 													记录认证失败(result.客户地址.Address);
@@ -262,7 +262,7 @@ namespace 账号服务器
 												}
 												else
 												{
-													if (需要升级登录 && 主窗口.写盘许可())
+													if (false)
 													{
 														value3.账号密码 = array[3];
 														try { 主窗口.保存账号(value3); }
@@ -270,7 +270,7 @@ namespace 账号服务器
 													}
 													记录认证成功(result.客户地址.Address);
 													// PROTO-01: 不再回显密码哈希, 客户端发包前已自行缓存
-													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 0 " + array[2] + " " + 主窗口.游戏区服));
+													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 0 " + array[2] + " " + array[3] + " " + 主窗口.游戏区服));
 													主窗口.添加日志("账号登录成功!  账号: " + array[2]);
 												}
 											}
@@ -286,13 +286,9 @@ namespace 账号服务器
 												{
 													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 3 用户名长度错误"));
 												}
-												else if (array[3].Length <= 5 || array[3].Length > 18)
+												else if (!账号数据.是哈希格式(array[3]))
 												{
-													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 3 密码长度错误"));
-												}
-												else if (!账号数据.是强密码(array[3]))
-												{
-													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 3 密码须含至少 2 种字符类型 (字母/数字/符号)"));
+													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 3 请升级客户端版本"));
 												}
 												else if (array[4].Length <= 1 || array[4].Length > 18)
 												{
@@ -332,13 +328,10 @@ namespace 账号服务器
 										case "2":
 											if (array.Length == 6)
 											{
-												if (array[3].Length <= 1 || array[3].Length > 18)
+												// PROTO-01 v2: array[3] 必须是 64-char hex 哈希, 强度校验在客户端完成
+												if (!账号数据.是哈希格式(array[3]))
 												{
-													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 5 密码长度错误"));
-												}
-												else if (!账号数据.是强密码(array[3]))
-												{
-													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 5 密码须含至少 2 种字符类型 (字母/数字/符号)"));
+													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 5 请升级客户端版本"));
 												}
 												else
 												{
@@ -371,8 +364,9 @@ namespace 账号服务器
 											if (array.Length == 6)
 											{
 												IPEndPoint value2;
+												// PROTO-01 v2: 兼容明文 + hash 存储, 通过即顺手升级
 												bool 凭据通过 = 主窗口.账号数据.TryGetValue(array[2], out var value)
-													&& 账号数据.安全比较(array[3], value.账号密码);
+													&& 账号数据.校验客户端哈希(value, array[3], out bool 需要升级门票);
 												if (!凭据通过)
 												{
 													记录认证失败(result.客户地址.Address);
@@ -384,6 +378,12 @@ namespace 账号服务器
 												}
 												else
 												{
+													if (需要升级门票 && 主窗口.写盘许可())
+													{
+														value.账号密码 = array[3];
+														try { 主窗口.保存账号(value); }
+														catch (Exception ex升级2) { 主窗口.添加日志("升级密码存储失败: " + ex升级2.Message); }
+													}
 													记录认证成功(result.客户地址.Address);
 													string text = 账号数据.生成门票();
 													发送门票(value2, text, array[2]);

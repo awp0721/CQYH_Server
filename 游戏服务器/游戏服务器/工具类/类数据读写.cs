@@ -2,7 +2,7 @@ using System;
 using System.Reflection;
 using 游戏服务器.地图类;
 
-namespace 工具类
+namespace 游戏服务器.工具类
 {
 	public class 类数据读写
 	{

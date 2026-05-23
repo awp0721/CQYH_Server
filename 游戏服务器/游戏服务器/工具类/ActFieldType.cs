@@ -1,4 +1,4 @@
-namespace 工具类
+namespace 游戏服务器.工具类
 {
 	public enum ActFieldType
 	{

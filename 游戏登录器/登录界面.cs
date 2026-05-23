@@ -84,6 +84,23 @@ namespace 游戏登录器
             修改_错误提示标签.Visible = false;
         }
 
+        // MISC-02: 客户端在 hash 之前校验明文密码强度. 服务端只看到 hash, 无法在那侧校验.
+        private static bool 是强密码(string pwd)
+        {
+            if (string.IsNullOrEmpty(pwd)) return false;
+            int 类别 = 0;
+            bool 有小写 = false, 有大写 = false, 有数字 = false, 有特殊 = false;
+            foreach (char c in pwd)
+            {
+                if (!有小写 && c >= 'a' && c <= 'z') { 有小写 = true; 类别++; }
+                else if (!有大写 && c >= 'A' && c <= 'Z') { 有大写 = true; 类别++; }
+                else if (!有数字 && c >= '0' && c <= '9') { 有数字 = true; 类别++; }
+                else if (!有特殊 && !char.IsLetterOrDigit(c)) { 有特殊 = true; 类别++; }
+                if (类别 >= 2) return true;
+            }
+            return false;
+        }
+
         // 协议 v2: 密码字段在传输前先 hash, 避免端到端明文密码 + 服务端不必持有可逆密码.
         // 域分隔字符串 "YH-Auth-v2" 防止跨用途碰撞 (如签名/HMAC 复用同口令).
         // 服务端: 见 账号服务器/网络通信.cs 同名实现, 两端必须保持一致.
@@ -650,6 +667,12 @@ namespace 游戏登录器
                 注册_错误提示标签.Visible = true;
                 return;
             }
+            if (!是强密码(注册_账号密码输入框.Text))
+            {
+                注册_错误提示标签.Text = "密码须含至少 2 种字符类型 (字母/数字/符号)";
+                注册_错误提示标签.Visible = true;
+                return;
+            }
             if (注册_密保问题输入框.Text.Length <= 0)
             {
                 注册_错误提示标签.Text = "密保问题不能为空";
@@ -737,6 +760,12 @@ namespace 游戏登录器
             if (修改_账号密码输入框.Text.Length <= 5 || 修改_账号密码输入框.Text.Length > 18)
             {
                 修改_错误提示标签.Text = "密码长度只能为6-18位";
+                修改_错误提示标签.Visible = true;
+                return;
+            }
+            if (!是强密码(修改_账号密码输入框.Text))
+            {
+                修改_错误提示标签.Text = "密码须含至少 2 种字符类型 (字母/数字/符号)";
                 修改_错误提示标签.Visible = true;
                 return;
             }

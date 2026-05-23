@@ -10810,15 +10810,15 @@ namespace 游戏服务器.地图类
                 }
                 return true;
             }
-            物品使用类型 物品使用属性;
-            物品使用属性 = item.物品使用属性;
-            if (物品使用属性 == 物品使用类型.未知分类)
+            // 重命名局部变量避开类型 物品使用属性 在本方法内的名字遮蔽
+            物品使用类型 使用类型 = item.物品使用属性;
+            if (使用类型 == 物品使用类型.未知分类)
             {
                 return false;
             }
             bool flag;
             flag = false;
-            switch (物品使用属性)
+            switch (使用类型)
             {
                 case 物品使用类型.体力回复:
                     flag = this.ProcessConsumableRecoveryHP(item);
