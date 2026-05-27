@@ -1234,7 +1234,7 @@ namespace 游戏服务器
             Margin = new Padding(4);
             Name = "SMain";
             Ribbon = ribbonControl1;
-            Text = "（传奇永恒）游戏服务端 - 游戏区名称：";
+            Text = "Elaina Engine - 游戏区名称：";
             Load += SMain_Load;
             ((ISupportInitialize)ribbonControl1).EndInit();
             ((ISupportInitialize)popupControlContainer3).EndInit();

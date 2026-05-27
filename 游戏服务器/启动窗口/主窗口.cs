@@ -15,7 +15,6 @@ using 游戏服务器.管理命令;
 using 游戏服务器.模板类;
 using 游戏服务器.数据类;
 using 游戏服务器.网络类;
-//using LicenseTool;
 
 namespace 游戏服务器
 {
@@ -305,7 +304,7 @@ namespace 游戏服务器
 
         public TabControl 日志选项卡;
 
-        private GroupBox S_软件授权分组;
+        private GroupBox S_充值密钥分组;
 
         private Label S_自动保存标签;
 
@@ -370,8 +369,6 @@ namespace 游戏服务器
         public static void 加载系统数据(int 单独加载 = 0)
         {
             主窗口.暂停界面更新 = true;
-            //主程.添加系统日志("本机机器码:" + LicenseInfo.GetThisMachineCode());
-            主程.添加系统日志("授权状态:" + LicenseLoader.desc);
             主窗口.添加系统日志("正在加载系统数据...");
             主窗口.地图数据表 = new DataTable("地图数据表");
             主窗口.地图数据行 = new Dictionary<游戏地图, DataRow>();
@@ -2013,7 +2010,7 @@ namespace 游戏服务器
             this.公告计时 = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.公告内容 = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.设置页面 = new System.Windows.Forms.TabPage();
-            this.S_软件授权分组 = new System.Windows.Forms.GroupBox();
+            this.S_充值密钥分组 = new System.Windows.Forms.GroupBox();
             this.S_软件注册代码 = new System.Windows.Forms.TextBox();
             this.S_游戏数据分组 = new System.Windows.Forms.GroupBox();
             this.S_注意事项标签8 = new System.Windows.Forms.Label();
@@ -2116,7 +2113,7 @@ namespace 游戏服务器
             this.公告页面.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)this.公告浏览表).BeginInit();
             this.设置页面.SuspendLayout();
-            this.S_软件授权分组.SuspendLayout();
+            this.S_充值密钥分组.SuspendLayout();
             this.S_游戏数据分组.SuspendLayout();
             this.S_游戏设置分组.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)this.S_新手扶持等级).BeginInit();
@@ -3152,7 +3149,7 @@ namespace 游戏服务器
             this.公告内容.Width = 884;
             this.设置页面.BackColor = System.Drawing.Color.Gainsboro;
             this.设置页面.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
-            this.设置页面.Controls.Add(this.S_软件授权分组);
+            this.设置页面.Controls.Add(this.S_充值密钥分组);
             this.设置页面.Controls.Add(this.S_游戏数据分组);
             this.设置页面.Controls.Add(this.S_游戏设置分组);
             this.设置页面.Controls.Add(this.S_网络设置分组);
@@ -3163,15 +3160,15 @@ namespace 游戏服务器
             this.设置页面.Size = new System.Drawing.Size(1783, 767);
             this.设置页面.TabIndex = 11;
             this.设置页面.Text = "设置";
-            this.S_软件授权分组.Controls.Add(this.S_软件注册代码);
-            this.S_软件授权分组.Location = new System.Drawing.Point(23, 616);
-            this.S_软件授权分组.Margin = new System.Windows.Forms.Padding(5);
-            this.S_软件授权分组.Name = "S_软件授权分组";
-            this.S_软件授权分组.Padding = new System.Windows.Forms.Padding(5);
-            this.S_软件授权分组.Size = new System.Drawing.Size(887, 92);
-            this.S_软件授权分组.TabIndex = 11;
-            this.S_软件授权分组.TabStop = false;
-            this.S_软件授权分组.Text = "充值平台密钥";
+            this.S_充值密钥分组.Controls.Add(this.S_软件注册代码);
+            this.S_充值密钥分组.Location = new System.Drawing.Point(23, 616);
+            this.S_充值密钥分组.Margin = new System.Windows.Forms.Padding(5);
+            this.S_充值密钥分组.Name = "S_充值密钥分组";
+            this.S_充值密钥分组.Padding = new System.Windows.Forms.Padding(5);
+            this.S_充值密钥分组.Size = new System.Drawing.Size(887, 92);
+            this.S_充值密钥分组.TabIndex = 11;
+            this.S_充值密钥分组.TabStop = false;
+            this.S_充值密钥分组.Text = "充值平台密钥";
             this.S_软件注册代码.Location = new System.Drawing.Point(9, 35);
             this.S_软件注册代码.Margin = new System.Windows.Forms.Padding(5);
             this.S_软件注册代码.Name = "S_软件注册代码";
@@ -3902,8 +3899,8 @@ namespace 游戏服务器
             this.公告页面.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)this.公告浏览表).EndInit();
             this.设置页面.ResumeLayout(false);
-            this.S_软件授权分组.ResumeLayout(false);
-            this.S_软件授权分组.PerformLayout();
+            this.S_充值密钥分组.ResumeLayout(false);
+            this.S_充值密钥分组.PerformLayout();
             this.S_游戏数据分组.ResumeLayout(false);
             this.S_游戏数据分组.PerformLayout();
             this.S_游戏设置分组.ResumeLayout(false);

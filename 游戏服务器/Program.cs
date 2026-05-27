@@ -17,27 +17,15 @@ namespace 游戏服务器
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
             AppDomain.CurrentDomain.UnhandledException += _0001_0003_0009_000B_000D_0008_000E_000D;
             Settings.Load();
-            Application.Run(new SMain());
-            /*
-			LicenseLoader.Load();
-			if (LicenseLoader.isLicense && Settings.统计UUID代码 == "")
-			{
-				MessageBox.Show("授权版本必须填写 统计UUID");
-				Environment.Exit(0);
-			}
-			else if (str1.Length != 0)
-			{
-				if (str1[0] == "old")
-				{
-					主程.OldForm = true;
-					Application.Run(new 主窗口());
-				}
-			}
-			else
-			{
-				Application.Run(new SMain());
-			}
-			*/
+            if (str1.Length != 0 && str1[0] == "old")
+            {
+                主程.OldForm = true;
+                Application.Run(new 主窗口());
+            }
+            else
+            {
+                Application.Run(new SMain());
+            }
         }
 
         private static void _0010_0013_0005_0007_0001_0009(object _000C_000A_000E_0008_0003_000A_0002_0003, ThreadExceptionEventArgs _0005_0008_0005_000B_0009_0003_000B_0002)

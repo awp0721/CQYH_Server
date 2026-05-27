@@ -32,7 +32,6 @@ using DevExpress.XtraEditors.Controls;
 using DevExpress.XtraEditors.Repository;
 using DevExpress.XtraGrid.Views.Grid;
 using DevExpress.XtraNavBar;
-//using LicenseTool;
 using MethodInvoker = System.Windows.Forms.MethodInvoker;
 using System.Windows.Controls.Ribbon;
 using RibbonControl = DevExpress.XtraBars.Ribbon.RibbonControl;
@@ -92,6 +91,8 @@ namespace 游戏服务器
 
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls13;
             this.ShowView(typeof(SystemLogView));
+            主程.添加系统日志("Elaina Engine (伊蕾娜引擎)");
+            主程.添加系统日志("源码仓库: https://github.com/awp0721/CQYH_Server");
             ribbonControl1.Enabled = false;
             navBarControl1.Enabled = false;
             Task.Run(delegate

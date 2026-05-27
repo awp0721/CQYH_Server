@@ -6,6 +6,20 @@
 
 ## [Unreleased]
 
+- 补齐 0.6.0 漏改的 SMain(新主窗口)品牌:`（传奇永恒）游戏服务端 - 游戏区名称：` → `Elaina Engine - 游戏区名称：`
+- 服务器启动时在系统日志输出 banner:`Elaina Engine (伊蕾娜引擎)` + `源码仓库: https://github.com/awp0721/CQYH_Server`
+  - 注意:`账号服务器/主窗口.cs` 中默认 Server.txt 的 `/传奇永恒` 分组名暂未修改,因其影响客户端登录时的分组匹配,改名需配合客户端预设同步
+- 移除游戏服务器中残留的"软件授权"机制
+  - 删除 `游戏服务器/LicenseTool/`(`LicenseInfo.cs` + `LicenseLoader.cs`,含硬编码 RSA 私钥 + Win32_Processor 机器码方案)
+  - 清理 `Program.cs` 启动时早已注释的 LicenseLoader 死代码块,简化 Main 入口
+  - 移除 `主窗口.加载系统数据()` 里"授权状态" / "本机机器码"系统日志输出
+  - 重命名遗留的 `S_软件授权分组` 控件 → `S_充值密钥分组`(Text 在更早提交里已改为"充值平台密钥")
+  - 删除 `SMain.cs` / `主窗口.cs` 顶部的 `//using LicenseTool;` 注释残留
+- 规范化 `游戏服务器/` 根目录散落文件,统一按"\*\*类 / \*\*窗口"风格归类
+  - 新建 `主程类/`:收纳 6 个 `主程.*.cs` 分部类
+  - 新建 `启动窗口/`:收纳 `SMain` / `SMainR` / `主窗口` 三套窗体文件(含 `.Designer.cs` / `.resx`)
+  - 合并 `AStar/` + `AStarPathing/` → `寻路类/`(10 个寻路相关文件)
+  - 保留 `Program.cs` / `Settings.cs` / `GlobalUsings.cs` / `App.config` / `app.ico` / `lua54.dll` / `csproj` 等入口/配置文件在根目录
 - 新增 `Database/README.md`:说明引擎基础数据目录结构、部署放置位置、`Settings.游戏数据目录` 配置方式、典型访问路径
   - 顺带消除 GitHub 仓库首页 `Database/System` 单子目录折叠显示
 
