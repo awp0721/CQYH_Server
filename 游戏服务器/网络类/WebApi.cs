@@ -69,8 +69,33 @@ namespace WebApi
             }
             try
             {
+                // body 大小硬上限, 防止恶意大 body 撑爆内存
+                const int 最大请求体字节 = 64 * 1024;
+                if (request.ContentLength64 > 最大请求体字节)
+                {
+                    base.WriteResponse(response, "request too large");
+                    return;
+                }
+                string raw;
+                using (var sr = new StreamReader(request.InputStream, Encoding.UTF8))
+                {
+                    char[] buf = new char[最大请求体字节];
+                    int read = sr.ReadBlock(buf, 0, buf.Length);
+                    // 仍有剩余 -> body 超长, 拒绝
+                    if (sr.Peek() != -1)
+                    {
+                        base.WriteResponse(response, "request too large");
+                        return;
+                    }
+                    raw = new string(buf, 0, read);
+                }
                 Dictionary<string, string> dictionary;
-                dictionary = JsonConvert.DeserializeObject<Dictionary<string, string>>(HttpUtility.UrlDecode(new StreamReader(request.InputStream, Encoding.UTF8).ReadToEnd()));
+                dictionary = JsonConvert.DeserializeObject<Dictionary<string, string>>(HttpUtility.UrlDecode(raw));
+                if (dictionary == null)
+                {
+                    base.WriteResponse(response, "invalid json");
+                    return;
+                }
                 if (dictionary.TryGetValue("sign", out var value))
                 {
                     dictionary.Remove("sign");
@@ -163,7 +188,9 @@ namespace WebApi
             }
             catch (Exception ex)
             {
-                base.WriteResponse(response, "request error: " + ex);
+                // 不向调用方回显异常详情 (栈/类型名), 仅服务端日志, 防止信息泄露
+                主程.添加系统日志("[WebApi] OnPostRequest 异常: " + ex);
+                base.WriteResponse(response, "request error");
             }
         }
 

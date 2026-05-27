@@ -571,11 +571,25 @@ namespace 游戏服务器
             });
         }
 
+        // 日志注入防护: 客户端聊天可能含 ANSI/控制字符/换行, 破坏 UI 显示或污染保存的聊天日志文件.
+        private static string 净化聊天文本(byte[] 内容)
+        {
+            if (内容 == null || 内容.Length == 0) return string.Empty;
+            string raw = Encoding.UTF8.GetString(内容).Trim('\0');
+            if (raw.Length > 512) raw = raw.Substring(0, 512);
+            StringBuilder sb = new StringBuilder(raw.Length);
+            foreach (char c in raw)
+            {
+                if (c >= 0x20 && c != 0x7F) sb.Append(c);
+            }
+            return sb.ToString();
+        }
+
         public static void 添加聊天日志(string 前缀, byte[] 内容)
         {
             主窗口.主界面?.BeginInvoke((MethodInvoker)delegate
             {
-                主窗口.主界面.聊天日志.AppendText($"[{DateTime.Now:F}]: {前缀 + Encoding.UTF8.GetString(内容).Trim('\0')}" + "\r\n");
+                主窗口.主界面.聊天日志.AppendText($"[{DateTime.Now:F}]: {前缀 + 净化聊天文本(内容)}" + "\r\n");
                 主窗口.主界面.聊天日志.ScrollToCaret();
                 Button button;
                 button = 主窗口.主界面.清空聊天日志;

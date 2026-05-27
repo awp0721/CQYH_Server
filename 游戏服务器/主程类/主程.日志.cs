@@ -45,6 +45,21 @@ namespace 游戏服务器
             }
         }
 
+        // 日志注入防护: 客户端聊天内容可能塞 ANSI/控制字符/换行, 直接写日志会污染 UI 显示
+        // 与文件输出 (聊天日志 ScrollToCaret 显示 + 保存聊天日志 File.WriteAllText). 入口统一净化.
+        private static string 净化聊天文本(byte[] 内容)
+        {
+            if (内容 == null || 内容.Length == 0) return string.Empty;
+            string raw = Encoding.UTF8.GetString(内容).Trim('\0');
+            if (raw.Length > 512) raw = raw.Substring(0, 512);
+            StringBuilder sb = new StringBuilder(raw.Length);
+            foreach (char c in raw)
+            {
+                if (c >= 0x20 && c != 0x7F) sb.Append(c);
+            }
+            return sb.ToString();
+        }
+
         public static void 添加聊天日志(string 前缀, byte[] 内容)
         {
             if (主程.OldForm)
@@ -53,7 +68,7 @@ namespace 游戏服务器
                 return;
             }
             string item;
-            item = $"[{主程.当前时间:F}]: {前缀 + Encoding.UTF8.GetString(内容).Trim('\0')}";
+            item = $"[{主程.当前时间:F}]: {前缀 + 净化聊天文本(内容)}";
             if (主程.DisplayChatLogs.Count < 500)
             {
                 主程.DisplayChatLogs.Enqueue(item);

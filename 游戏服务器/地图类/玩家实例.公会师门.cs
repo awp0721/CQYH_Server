@@ -508,6 +508,9 @@ namespace 游戏服务器.地图类
                 }
                 if (this.角色数据 == this.所属队伍.队长数据)
                 {
+                    // 与玩家自主离队对齐: 队长强制踢人时也要清理被踢者的未完成拍卖,
+                    // 否则攻击者作为队长可以让队员竞价中突然被踢, 金币/物品状态卡死.
+                    this.所属队伍.放弃所有拍卖(角色数据);
                     this.所属队伍.队伍成员.Remove(角色数据);
                     角色数据.当前队伍 = null;
                     this.所属队伍.发送封包(new 队伍成员离开
@@ -648,9 +651,10 @@ namespace 游戏服务器.地图类
                     string key;
                     key = Encoding.UTF8.GetString(array).Split(new char[1], StringSplitOptions.RemoveEmptyEntries)[0];
                     string 标题;
-                    标题 = Encoding.UTF8.GetString(array2).Split(new char[1], StringSplitOptions.RemoveEmptyEntries)[0];
+                    // LOW-A 续: 标题/正文 会保存到收件人邮件并展示在 UI, 同样需要过滤控制字符与双向覆写
+                    标题 = 净化展示文本(Encoding.UTF8.GetString(array2).Split(new char[1], StringSplitOptions.RemoveEmptyEntries)[0]);
                     string 正文;
-                    正文 = Encoding.UTF8.GetString(array3).Split(new char[1], StringSplitOptions.RemoveEmptyEntries)[0];
+                    正文 = 净化展示文本(Encoding.UTF8.GetString(array3).Split(new char[1], StringSplitOptions.RemoveEmptyEntries)[0]);
                     if (游戏数据网关.角色数据表.检索表.TryGetValue(key, out var value) && value is 角色数据 角色数据)
                     {
                         if (角色数据.角色邮件.Count >= 100)
@@ -1004,7 +1008,17 @@ namespace 游戏服务器.地图类
                 array2 = Encoding.UTF8.GetString(数据.Skip(25).ToArray()).Split(new char[1], StringSplitOptions.RemoveEmptyEntries);
                 if (array.Length != 0 && array2.Length != 0 && Encoding.UTF8.GetBytes(array[0]).Length < 25 && Encoding.UTF8.GetBytes(array2[0]).Length < 101)
                 {
-                    if (游戏数据网关.行会数据表.检索表.ContainsKey(array[0]))
+                    // LOW-A 续: 行会名会被全服公告 ($"[xxx]创建了行会[xxx]") 和加入聊天广播,
+                    // 控制字符/双向覆写会污染所有玩家的 UI; 这里直接拒绝异常字符而非吞掉,
+                    // 因为行会名永久存在数据库, 而且 ContainsKey 查询也应基于原字符串.
+                    string 行会名 = 净化展示文本(array[0]);
+                    string 行会宣言 = 净化展示文本(array2[0]);
+                    if (string.IsNullOrEmpty(行会名) || string.IsNullOrEmpty(行会宣言))
+                    {
+                        this.网络连接?.尝试断开连接(new Exception("错误操作: 申请创建行会. 错误: 名字含非法字符."));
+                        return;
+                    }
+                    if (游戏数据网关.行会数据表.检索表.ContainsKey(行会名))
                     {
                         this.网络连接?.发送封包(new 游戏错误提示
                         {
@@ -1015,7 +1029,7 @@ namespace 游戏服务器.地图类
                     this.金币数量 -= 200000u;
                     主程.添加货币日志(this, "创建行会扣除", 游戏货币.金币, -200000);
                     this.消耗背包物品(1, 物品, "创建行会扣除");
-                    this.所属行会 = new 行会数据(this, array[0], array2[0]);
+                    this.所属行会 = new 行会数据(this, 行会名, 行会宣言);
                     this.网络连接?.发送封包(new 创建行会应答
                     {
                         行会名字 = this.所属行会.行会名字.V
@@ -1066,13 +1080,33 @@ namespace 游戏服务器.地图类
                 }
                 else
                 {
-                    this.所属行会.更改公告(Encoding.UTF8.GetString(数据).Split('\0')[0]);
+                    this.所属行会.更改公告(净化展示文本(Encoding.UTF8.GetString(数据).Split('\0')[0]));
                 }
             }
             else
             {
                 this.网络连接?.尝试断开连接(new Exception("错误操作: 更改行会公告. 错误: 数据长度错误"));
             }
+        }
+
+        // LOW-A: 行会公告/宣言/摊位名 等会广播到其他玩家 UI 的文本, 客户端可塞入
+        // 控制字符 (\r \n \b ESC 等) 与 RTL/双向覆写 Unicode 字符, 在不同客户端
+        // 显示效果不一致, 可被用于钓鱼/伪装系统消息. 入口统一过滤.
+        private static string 净化展示文本(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return string.Empty;
+            System.Text.StringBuilder sb;
+            sb = new System.Text.StringBuilder(raw.Length);
+            foreach (char c in raw)
+            {
+                // 丢弃 C0 控制字符 (\0~\x1F) + DEL (\x7F) + Unicode 双向覆写
+                if (c < 0x20 || c == 0x7F) continue;
+                // U+202A..202E + U+2066..2069 是 Unicode 双向控制符, 易被钓鱼
+                if (c >= 0x202A && c <= 0x202E) continue;
+                if (c >= 0x2066 && c <= 0x2069) continue;
+                sb.Append(c);
+            }
+            return sb.ToString();
         }
 
         public void 更改行会宣言(byte[] 数据)
@@ -1099,7 +1133,7 @@ namespace 游戏服务器.地图类
                 }
                 else
                 {
-                    this.所属行会.更改宣言(this.角色数据, Encoding.UTF8.GetString(数据).Split('\0')[0]);
+                    this.所属行会.更改宣言(this.角色数据, 净化展示文本(Encoding.UTF8.GetString(数据).Split('\0')[0]));
                 }
             }
             else

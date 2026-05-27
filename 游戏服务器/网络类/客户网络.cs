@@ -532,6 +532,8 @@ namespace 游戏服务器.网络类
 
         public void 处理封包(鉴定无相钥石 P)
         {
+            // PROTO-04 续: 原无认证 → 未登录客户端可触发服务端发包, 浪费带宽与统计.
+            if (this.当前阶段 != 游戏阶段.正在游戏 || this.绑定角色 == null) return;
             this.SendRaw(130, 4, new byte[2] { 1, P.背包位置 });
             byte[] obj;
             obj = new byte[80]
@@ -573,6 +575,8 @@ namespace 游戏服务器.网络类
 
         public void 处理封包(内挂物品过滤 P)
         {
+            // PROTO-04 续: 原无认证 → 攻击者未登录就能让服务端构造 BitArray + 多次哈希查表, 轻量 DoS.
+            if (this.当前阶段 != 游戏阶段.正在游戏 || this.绑定角色 == null) return;
             this.绑定角色?.物品过滤.Clear();
             this.绑定角色?.物品极品提示.Clear();
             BitArray bitArray;
@@ -960,11 +964,15 @@ namespace 游戏服务器.网络类
 
         public void 处理封包(领取七天奖励 P)
         {
+            // PROTO-04 续: 原无阶段守卫
+            if (this.当前阶段 != 游戏阶段.正在游戏 && this.当前阶段 != 游戏阶段.场景加载) return;
             this.绑定角色?.领取七天奖励(P.未知参数, P.领取编号);
         }
 
         public void 处理封包(领取七天大奖 P)
         {
+            // PROTO-04 续: 原无阶段守卫
+            if (this.当前阶段 != 游戏阶段.正在游戏 && this.当前阶段 != 游戏阶段.场景加载) return;
             this.绑定角色?.领取七天大奖(P.领取天数);
         }
 
@@ -2588,14 +2596,17 @@ namespace 游戏服务器.网络类
 
         public void 处理封包(发送好友聊天 P)
         {
+            // 聊天/邮件/广播类字段虽已由 HIGH-02 限制 64KB, 但单条聊天合理上限是几百字节;
+            // 64KB 全服广播会造成 O(连接数 * 字段长) 流量放大. 收紧到 2KB.
+            const int 单条聊天最大字节 = 2048;
             if (this.当前阶段 != 游戏阶段.正在游戏)
             {
                 this.尝试断开连接(new Exception($"阶段异常,断开连接.  处理封包: {P.GetType()},  当前阶段:{this.当前阶段}"));
                 return;
             }
-            else if (P.字节数据.Length < 7)
+            else if (P.字节数据.Length < 7 || P.字节数据.Length > 单条聊天最大字节)
             {
-                this.尝试断开连接(new Exception($"数据太短,断开连接.  处理封包: {P.GetType()},  数据长度:{P.字节数据.Length}"));
+                this.尝试断开连接(new Exception($"数据长度越界,断开连接.  处理封包: {P.GetType()},  数据长度:{P.字节数据.Length}"));
             }
             else if (P.字节数据.Last() != 0)
             {
@@ -2670,14 +2681,16 @@ namespace 游戏服务器.网络类
 
         public void 处理封包(发送聊天信息 P)
         {
+            // 单条聊天上限 2KB, 防止 64KB 广播包被放大成全服洪水. 详见 [DEEP-04].
+            const int 单条聊天最大字节 = 2048;
             if (this.当前阶段 != 游戏阶段.正在游戏)
             {
                 this.尝试断开连接(new Exception($"阶段异常,断开连接.  处理封包: {P.GetType()},  当前阶段:{this.当前阶段}"));
                 return;
             }
-            else if (P.字节数据.Length < 7)
+            else if (P.字节数据.Length < 7 || P.字节数据.Length > 单条聊天最大字节)
             {
-                this.尝试断开连接(new Exception($"数据太短,断开连接.  处理封包: {P.GetType()},  数据长度:{P.字节数据.Length}"));
+                this.尝试断开连接(new Exception($"数据长度越界,断开连接.  处理封包: {P.GetType()},  数据长度:{P.字节数据.Length}"));
             }
             else if (P.字节数据.Last() != 0)
             {
@@ -2691,14 +2704,15 @@ namespace 游戏服务器.网络类
 
         public void 处理封包(发送社交消息 P)
         {
+            const int 单条聊天最大字节 = 2048;
             if (this.当前阶段 != 游戏阶段.正在游戏)
             {
                 this.尝试断开连接(new Exception($"阶段异常,断开连接.  处理封包: {P.GetType()},  当前阶段:{this.当前阶段}"));
                 return;
             }
-            else if (P.字节数据.Length < 6)
+            else if (P.字节数据.Length < 6 || P.字节数据.Length > 单条聊天最大字节)
             {
-                this.尝试断开连接(new Exception($"数据太短,断开连接.  处理封包: {P.GetType()},  数据长度:{P.字节数据.Length}"));
+                this.尝试断开连接(new Exception($"数据长度越界,断开连接.  处理封包: {P.GetType()},  数据长度:{P.字节数据.Length}"));
             }
             else if (P.字节数据.Last() != 0)
             {
@@ -3621,6 +3635,8 @@ namespace 游戏服务器.网络类
 
         public void 处理封包(验证动态密码 P)
         {
+            // PROTO-04 续: 二级密码校验属于登录后流程, 拒绝未登录调用
+            if (this.当前阶段 != 游戏阶段.正在游戏 && this.当前阶段 != 游戏阶段.场景加载) return;
             this.绑定角色?.验证动态密码(P.动态密码);
         }
 
@@ -4014,6 +4030,8 @@ namespace 游戏服务器.网络类
 
         public void 处理封包(玩家放弃任务 P)
         {
+            // PROTO-04 续: 原无阶段守卫
+            if (this.当前阶段 != 游戏阶段.正在游戏 || this.绑定角色 == null) return;
             if (Settings.开启任务系统)
             {
                 this.绑定角色?.玩家放弃任务(P.任务编号);
@@ -4022,6 +4040,8 @@ namespace 游戏服务器.网络类
 
         public void 处理封包(组队拍卖竞价 P)
         {
+            // PROTO-04 续: 原无阶段守卫, 攻击者未登录就能在他人队伍触发竞价
+            if (this.当前阶段 != 游戏阶段.正在游戏 || this.绑定角色 == null) return;
             this.绑定角色?.角色数据?.当前队伍?.竞价拍卖(this.绑定角色.角色数据, P.拍卖顺序, P.当前竞价);
         }
 
@@ -4144,22 +4164,32 @@ namespace 游戏服务器.网络类
 
         public void 处理封包(自定义扩展封包 P)
         {
-            if (P.字节数据.Length >= 4)
+            // PROTO-04 续 + 日志注入: 原本未登录客户端可触发将任意 UTF-8 内容写入系统日志,
+            // 攻击者可借此污染日志 / 注入 ANSI 控制字符 / 钓鱼管理员 / 撑爆日志磁盘.
+            if (this.当前阶段 != 游戏阶段.正在游戏 || this.绑定角色 == null) return;
+            if (P.字节数据.Length < 4 || P.字节数据.Length > 1024) return;
+            BinaryReader binaryReader;
+            binaryReader = new BinaryReader(new MemoryStream(P.字节数据));
+            int num;
+            num = binaryReader.ReadInt32();
+            if (num == 1)
             {
-                BinaryReader binaryReader;
-                binaryReader = new BinaryReader(new MemoryStream(P.字节数据));
-                int num;
-                num = binaryReader.ReadInt32();
-                if (num == 1)
+                byte[] bytes;
+                bytes = binaryReader.ReadBytes(P.字节数据.Length - 4);
+                string raw;
+                raw = Encoding.UTF8.GetString(bytes);
+                // 过滤控制字符 (含 \r\n 与 ANSI 转义), 防日志注入伪造行
+                System.Text.StringBuilder sb;
+                sb = new System.Text.StringBuilder(raw.Length);
+                foreach (char ch in raw)
                 {
-                    byte[] bytes;
-                    bytes = binaryReader.ReadBytes(P.字节数据.Length - 4);
-                    主程.添加系统日志("收到自定义扩展协议ID 1:" + Encoding.UTF8.GetString(bytes));
+                    if (ch >= 0x20 && ch != 0x7F) sb.Append(ch);
                 }
-                else
-                {
-                    主程.添加系统日志("收到不支持的扩展协议ID:" + num);
-                }
+                主程.添加系统日志("收到自定义扩展协议ID 1:" + sb.ToString());
+            }
+            else
+            {
+                主程.添加系统日志("收到不支持的扩展协议ID:" + num);
             }
         }
     }
