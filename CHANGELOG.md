@@ -6,7 +6,8 @@
 
 ## [Unreleased]
 
-暂无未发布改动。
+- 新增 `Database/README.md`:说明引擎基础数据目录结构、部署放置位置、`Settings.游戏数据目录` 配置方式、典型访问路径
+  - 顺带消除 GitHub 仓库首页 `Database/System` 单子目录折叠显示
 
 ---
 
