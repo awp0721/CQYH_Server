@@ -275,8 +275,9 @@ namespace 账号服务器
 												else
 												{
 													记录认证成功(result.客户地址.Address);
-													// PROTO-01: 不再回显密码哈希, 客户端发包前已自行缓存
-													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 0 " + array[2] + " " + array[3] + " " + 主窗口.游戏区服));
+													// PROTO-01 / MED-E: 不再回显密码哈希, 客户端发包前已自行缓存.
+													// 响应固定 4 段: 包号 0 账号 区服列表 (客户端 登录界面.cs case "0" 以 array.Length==4 严格校验).
+													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 0 " + array[2] + " " + 主窗口.游戏区服));
 													主窗口.添加日志("账号登录成功!  账号: " + array[2]);
 												}
 											}

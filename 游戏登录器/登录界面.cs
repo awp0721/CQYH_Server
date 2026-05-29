@@ -6,7 +6,6 @@ using System.Drawing;
 using System.IO;
 using System.Net;
 using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
@@ -235,45 +234,6 @@ namespace 游戏登录器
                 // base64 解析失败或 DPAPI 解密失败 — 当作旧明文处理
             }
             return 存储值;
-        }
-
-        // 启动游戏前对游戏可执行文件做 Authenticode 弱模式校验：
-        // - 未签名 → 跳过（兼容未签名的开发构建，fail-open）
-        // - 已签名但链不合法 → 询问用户是否继续
-        // - 已签名且链合法 → 通过
-        // 返回 true 表示可以继续启动游戏。
-        private static bool 校验游戏可执行文件(string path)
-        {
-            try
-            {
-                using (var sig = X509Certificate.CreateFromSignedFile(path))
-                using (var cert2 = new X509Certificate2(sig))
-                using (var chain = new X509Chain())
-                {
-                    chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-                    if (!chain.Build(cert2))
-                    {
-                        DialogResult r = MessageBox.Show(
-                            "游戏可执行文件签名校验失败, 可能已被篡改. 是否继续启动?",
-                            "安全警告",
-                            MessageBoxButtons.YesNo,
-                            MessageBoxIcon.Warning,
-                            MessageBoxDefaultButton.Button2);
-                        return r == DialogResult.Yes;
-                    }
-                    return true;
-                }
-            }
-            catch (CryptographicException)
-            {
-                // 未签名：保持现状，允许启动（项目可能尚未配置发布签名）
-                return true;
-            }
-            catch
-            {
-                // 校验过程意外错误不阻塞启动，仅当签名明确无效时才提示
-                return true;
-            }
         }
 
         // 包号: 之前 ++封包编号 从 0 起顺序递增, 可被预测; 改为每次发包前生成 [1, int.MaxValue) 随机数.
@@ -522,12 +482,6 @@ namespace 游戏登录器
                         else if (游戏区服.TryGetValue(启动_选中区服标签.Text, out value))
                         {
                             const string 游戏路径 = ".\\Binaries\\Win32\\MMOGame-Win32-Shipping.exe";
-                            // 登录器以管理员权限运行, 在拉起游戏前做一次签名校验, 降低本地权限提升攻击面
-                            if (!校验游戏可执行文件(游戏路径))
-                            {
-                                用户界面解锁(null, null);
-                                break;
-                            }
                             string 区服名 = 启动_选中区服标签.Text;
                             string 票据 = array[3];
                             // VV: 配置写入失败不应阻断启动游戏流程
@@ -577,6 +531,18 @@ namespace 游戏登录器
         {
             主选项卡.Enabled = true;
             用户界面计时.Enabled = false;
+        }
+
+        // 30 秒内没收到账号服务器任何响应时触发: 解锁界面并明确提示, 避免"点了没反应"的困惑.
+        // 登录 / 注册 / 改密 / 进入游戏 都复用 用户界面计时, 故用与选项卡无关的弹窗提示.
+        private void 登录请求超时(object sender, EventArgs e)
+        {
+            用户界面解锁(null, null);
+            MessageBox.Show(
+                "连接服务器超时, 未收到响应。\r\n请确认:\r\n1) 账号服务器已启动并正在监听;\r\n2) ServerCfg.txt 中的账号服务器 IP:端口 填写正确。",
+                "连接超时",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
         }
 
         public void 游戏进程检查(object sender, EventArgs e)
