@@ -46,8 +46,19 @@ namespace 游戏登录器
             }
             if (!File.Exists("./ServerCfg.txt"))
             {
-                MessageBox.Show("请在./ServerCfg.txt文件中配置账号服务器IP和端口");
-                Environment.Exit(0);
+                // 文件缺失时自动生成默认单机配置(本机账号服务器默认监听 8001),
+                // 单机玩家开箱即用; 联网请改成远程账号服务器的 IP:端口 后重启.
+                try
+                {
+                    File.WriteAllText("./ServerCfg.txt", "127.0.0.1:8001");
+                    MessageBox.Show("未找到 ServerCfg.txt, 已自动生成默认单机配置 127.0.0.1:8001。\r\n如需连接远程服务器, 请用记事本修改该文件后重启登录器。");
+                }
+                catch (Exception 创建异常)
+                {
+                    MessageBox.Show("自动创建 ServerCfg.txt 失败, 请手动在登录器目录新建该文件并填写 账号服务器IP:端口\r\n" + 创建异常.Message);
+                    Environment.Exit(0);
+                    return;
+                }
             }
             string 配置内容;
             try
