@@ -24,6 +24,8 @@ bld/
 
 # Build artifacts
 *.dll
+# 例外: 魔改 Lua 5.4(支持中文标识符), 游戏服务器.csproj 的"覆盖为魔改Lua"构建 Target 强依赖, 必须随仓库分发
+!游戏服务器/lua54.dll
 *.pdb
 *.exe
 *.cache
