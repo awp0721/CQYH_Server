@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### 变更
+
+- **游戏登录器单文件发布**：登录器编译产物不再附带一堆 DLL。`游戏登录器.csproj` 启用 `PublishSingleFile`（框架依赖、`win-x86`、不裁剪、`DebugType=none`），`dotnet publish -c Release -r win-x86 --self-contained false` 后发布目录仅剩单个 `游戏登录器.exe`（约 4.9 MB）。玩家端需预装 .NET 8 桌面运行时
+
 ### 安全修复（第二轮深度审计 2026-05-27）
 
 | ID | 严重 | 修复 |

@@ -10,6 +10,18 @@
 		<UseWindowsForms>true</UseWindowsForms>
 		<ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
 		<BaseOutputPath>.\</BaseOutputPath>
+
+		<!-- 方案A：单文件发布（框架依赖，玩家需装 .NET 8 桌面运行时） -->
+		<RuntimeIdentifier>win-x86</RuntimeIdentifier>
+		<PublishSingleFile>true</PublishSingleFile>
+		<SelfContained>false</SelfContained>
+		<!-- 不裁剪：WinForms + SunnyUI 大量用反射，裁剪会运行时崩溃 -->
+		<PublishTrimmed>false</PublishTrimmed>
+		<!-- 单文件运行时不在临时目录留下残留 dll -->
+		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+		<!-- 关掉调试符号生成，发布目录就只剩一个 exe -->
+		<DebugType>none</DebugType>
+		<DebugSymbols>false</DebugSymbols>
 	</PropertyGroup>
 	<ItemGroup>
 		<Compile Remove="bin\**" />
