@@ -198,6 +198,9 @@ namespace 游戏服务器.地图类
 
         public ushort[] 临时精炼;
 
+        // C08: 重新精炼随机结果缓冲所绑定的源装备. 替换时校验目标==源, 防跨装备/跨分类套用属性绕过开槽成本.
+        public 装备数据 临时精炼源;
+
         public DateTime 硬直检测;
 
         public int 硬直次数;
@@ -211,6 +214,10 @@ namespace 游戏服务器.地图类
         private Dictionary<string, DateTime> 下次请求时间 = new Dictionary<string, DateTime>();
 
         private int 请求间隔毫秒 = 100;
+
+        // C16: 寄售查询冷却(独立于 限制重要封包间隔时间 开关). 三个寄售查询均全表扫描, 无条件限速防算法型 DoS.
+        private DateTime 下次寄售查询时间 = DateTime.MinValue;
+        private const int 寄售查询冷却毫秒 = 500;
 
         private static DateTime 下次恢复;
 
@@ -13490,6 +13497,9 @@ namespace 游戏服务器.地图类
 
         public void 查询玩家战力(int 对象编号)
         {
+            // C12: 放大类查询无条件冷却(任意在线目标, 单封包查表+序列化下发), 防属性能退化型 DoS.
+            if (this.下次请求时间.TryGetValue("查询玩家战力", out var 战力冷却) && 主程.当前时间 < 战力冷却) return;
+            this.下次请求时间["查询玩家战力"] = 主程.当前时间.AddMilliseconds(300.0);
             if (地图处理网关.地图对象表.TryGetValue(对象编号, out var value) && value is 玩家实例 玩家实例2)
             {
                 this.网络连接?.发送封包(new 同步玩家战力
@@ -13509,6 +13519,9 @@ namespace 游戏服务器.地图类
 
         public void 查看对象装备(int 对象编号)
         {
+            // C15: 放大类查询无条件冷却(任意在线目标, 单封包放大为全装备+天赋序列化 4 个下发包), 防属性能退化型 DoS.
+            if (this.下次请求时间.TryGetValue("查看对象装备", out var 冷却到期) && 主程.当前时间 < 冷却到期) return;
+            this.下次请求时间["查看对象装备"] = 主程.当前时间.AddMilliseconds(300.0);
             this.硬直次数 = 2;
             this.硬直时间 = 主程.当前时间.AddSeconds(1.0);
             if (地图处理网关.地图对象表.TryGetValue(对象编号, out var value) && value is 玩家实例 玩家实例2)
@@ -15492,7 +15505,8 @@ namespace 游戏服务器.地图类
                 new byte[9] { 0, 125, 30, 80, 155, 65, 155, 155, 155 },
                 new byte[9] { 0, 160, 50, 120, 235, 75, 235, 235, 235 }
             };
-            if (!this.角色背包.TryGetValue(装备部位, out var v) || !(v is 装备数据 装备数据) || 装备数据.孔洞颜色.Count < 孔洞位置 || 装备数据.镶嵌灵石.ContainsKey((byte)孔洞位置))
+            // C13: 校验客户端 孔洞颜色(0..8 索引 9 元素 array)与 孔洞位置(0<=x<Count), 防越界异常自连接 DoS; 修原 off-by-one+负数放行.
+            if (孔洞颜色 < 0 || 孔洞颜色 > 8 || !this.角色背包.TryGetValue(装备部位, out var v) || !(v is 装备数据 装备数据) || 孔洞位置 < 0 || 孔洞位置 >= 装备数据.孔洞颜色.Count || 装备数据.镶嵌灵石.ContainsKey((byte)孔洞位置))
             {
                 return;
             }
@@ -16153,6 +16167,8 @@ namespace 游戏服务器.地图类
 
         public void 查询我的寄售()
         {
+            if (主程.当前时间 < this.下次寄售查询时间) return;
+            this.下次寄售查询时间 = 主程.当前时间.AddMilliseconds(寄售查询冷却毫秒);
             byte[] 道具字节;
             道具字节 = 寄售数据.我的商品数据(this.角色数据, out var 数量);
             base.发送封包(new 同步寄售列表
@@ -16165,6 +16181,8 @@ namespace 游戏服务器.地图类
 
         public void 查询寄售物品(int 过滤筛选)
         {
+            if (主程.当前时间 < this.下次寄售查询时间) return;
+            this.下次寄售查询时间 = 主程.当前时间.AddMilliseconds(寄售查询冷却毫秒);
             byte[] 道具字节;
             道具字节 = 寄售数据.查询商品数据(过滤筛选, out var 数量);
             base.发送封包(new 同步寄售列表
@@ -16177,6 +16195,8 @@ namespace 游戏服务器.地图类
 
         public void 查询指定物品(int 物品编号)
         {
+            if (主程.当前时间 < this.下次寄售查询时间) return;
+            this.下次寄售查询时间 = 主程.当前时间.AddMilliseconds(寄售查询冷却毫秒);
             byte[] 道具字节;
             道具字节 = 寄售数据.指定商品数据(物品编号, out var 数量);
             base.发送封包(new 同步寄售列表
@@ -16346,6 +16366,8 @@ namespace 游戏服务器.地图类
                     {
                         this.临时精炼[2] = 装备数据.精炼值三.V;
                     }
+                    // C08: 记录产生本缓冲的源装备引用, 替换时据此校验目标一致.
+                    this.临时精炼源 = 装备数据;
                     this.网络连接?.发送封包(new 回执精炼结果
                     {
                         结果值一 = this.临时精炼[0],
@@ -16366,7 +16388,9 @@ namespace 游戏服务器.地图类
                 {
                     字典监视器 = this.角色背包;
                 }
-                if ((字典监视器.TryGetValue(背包位置, out var v) ? v : null) is 装备数据 装备数据)
+                // C08: 仅当目标就是产生缓冲的同一件装备且其已开槽(开启精炼>0)才允许写入, 否则清缓冲并回执清零.
+                // 原实现只判 临时精炼[0]!=0 就把缓冲写到任意背包位置的装备, 可跨件/跨分类白嫖精炼属性绕开开槽材料成本.
+                if ((字典监视器.TryGetValue(背包位置, out var v) ? v : null) is 装备数据 装备数据 && object.ReferenceEquals(this.临时精炼源, 装备数据) && 装备数据.开启精炼.V > 0)
                 {
                     装备数据.精炼值一.V = this.临时精炼[0];
                     装备数据.精炼值二.V = this.临时精炼[1];
@@ -16375,6 +16399,7 @@ namespace 游戏服务器.地图类
                     this.临时精炼[0] = 0;
                     this.临时精炼[1] = 0;
                     this.临时精炼[2] = 0;
+                    this.临时精炼源 = null;
                     this.网络连接?.发送封包(new 玩家物品变动
                     {
                         物品描述 = 装备数据.字节描述()
@@ -16384,6 +16409,19 @@ namespace 游戏服务器.地图类
                         结果值一 = this.临时精炼[0],
                         结果值二 = this.临时精炼[1],
                         结果值三 = this.临时精炼[2]
+                    });
+                }
+                else
+                {
+                    this.临时精炼[0] = 0;
+                    this.临时精炼[1] = 0;
+                    this.临时精炼[2] = 0;
+                    this.临时精炼源 = null;
+                    this.网络连接?.发送封包(new 回执精炼结果
+                    {
+                        结果值一 = 0,
+                        结果值二 = 0,
+                        结果值三 = 0
                     });
                 }
             }
@@ -18192,14 +18230,12 @@ namespace 游戏服务器.地图类
             }
             int value;
             value = 0;
-            if (主题礼包固定物品模板.数据表.TryGetValue(m_日期序号, out var value2))
+            // C20 纵深: 查表失败即拒绝(原"查表成功才校验"会在 CSV 缺某天配置时静默跳过物品A白名单).
+            if (!主题礼包固定物品模板.数据表.TryGetValue(m_日期序号, out var value2) || !value2.ContainsKey(物品A_ID))
             {
-                if (!value2.ContainsKey(物品A_ID))
-                {
-                    return;
-                }
-                value2.TryGetValue(物品A_ID, out value);
+                return;
             }
+            value2.TryGetValue(物品A_ID, out value);
             int value3;
             value3 = 0;
             int value4;
@@ -18277,7 +18313,8 @@ namespace 游戏服务器.地图类
                     return true;
                 case 0:
                 case 6:
-                    if (m_封包日期序号 < 1 && m_封包日期序号 > 5)
+                    // C20: 原条件 <1 && >5 恒为假, 周末任意日期序号都被放行, 导致跳过物品A白名单越权获取任意装备. 应为 ||.
+                    if (m_封包日期序号 < 1 || m_封包日期序号 > 5)
                     {
                         return false;
                     }
@@ -19269,29 +19306,43 @@ namespace 游戏服务器.地图类
                 array = new 物品数据[合成参数.Length];
                 int[] array2;
                 array2 = new int[合成参数.Length];
+                // C03: 按"背包真实槽位"累计每槽需消耗量, 防止同一物品被多个配方位置重复计入只扣一份(一份料产整件).
+                Dictionary<byte, int> 槽位累计需求;
+                槽位累计需求 = new Dictionary<byte, int>();
                 for (int i = 0; i < 合成参数.Length; i++)
                 {
                     array[i] = this.角色背包[合成参数[i]];
-                    if (array[i] != null)
+                    if (array[i] == null)
                     {
-                        int[] 替换物品一;
-                        替换物品一 = value.合成材料[i].替换物品一;
-                        array2[i] = Math.Max(value.合成材料[i].需要数量, 1);
-                        if (array2[i] <= 0 || array[i].当前持久.V >= array2[i])
-                        {
-                            if (!替换物品一.Contains(array[i].物品编号))
-                            {
-                                return 0;
-                            }
-                            continue;
-                        }
                         return 0;
                     }
-                    return 0;
+                    int[] 替换物品一;
+                    替换物品一 = value.合成材料[i].替换物品一;
+                    if (!替换物品一.Contains(array[i].物品编号))
+                    {
+                        return 0;
+                    }
+                    array2[i] = Math.Max(value.合成材料[i].需要数量, 1);
+                    int 本位消耗;
+                    本位消耗 = (array[i].持久类型 == 物品持久分类.装备) ? array[i].当前持久.V : array2[i];
+                    byte 槽;
+                    槽 = 合成参数[i];
+                    槽位累计需求[槽] = (槽位累计需求.TryGetValue(槽, out var 已累计) ? 已累计 : 0) + 本位消耗;
                 }
-                for (int j = 0; j < array.Length; j++)
+                // 用累计需求对每个不同槽位的真实持久做一次性校验(同一对象被多位引用时需求已合并)
+                foreach (KeyValuePair<byte, int> 项 in 槽位累计需求)
                 {
-                    this.消耗背包物品((array[j].持久类型 == 物品持久分类.装备) ? array[j].当前持久.V : array2[j], array[j], "合成物品消耗");
+                    物品数据 槽物品;
+                    槽物品 = this.角色背包[项.Key];
+                    if (槽物品 == null || 槽物品.当前持久.V < 项.Value)
+                    {
+                        return 0;
+                    }
+                }
+                // 每个不同槽位只消耗一次累计量
+                foreach (KeyValuePair<byte, int> 项 in 槽位累计需求)
+                {
+                    this.消耗背包物品(项.Value, this.角色背包[项.Key], "合成物品消耗");
                 }
                 this.金币数量 -= (uint)value.需要金币;
                 this.玩家获得物品(value.合成物品, 1, "合成物品获得");

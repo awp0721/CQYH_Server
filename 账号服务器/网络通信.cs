@@ -39,6 +39,15 @@ namespace 账号服务器
 		private static readonly ConcurrentDictionary<IPAddress, 限速桶> 限速表
 			= new ConcurrentDictionary<IPAddress, 限速桶>();
 
+		// C06: 按账号维度的认证失败封禁, 与 per-IP 表解耦. 攻击者即便伪造源 IP 撑爆 per-IP 限速表,
+		// 也无法绕过针对单个被攻击账号的暴破锁定.
+		private static readonly ConcurrentDictionary<string, 限速桶> 账号失败表
+			= new ConcurrentDictionary<string, 限速桶>();
+		private const int 账号失败窗口秒数 = 300;
+		private const int 账号失败最大次数 = 20;
+		private const int 账号封禁秒数 = 300;
+		private const int 账号失败表上限 = 100_000;
+
 		// 认证失败: 60 秒内累计 10 次就封禁 5 分钟.
 		private const int 失败窗口秒数 = 60;
 		private const int 失败最大次数 = 10;
@@ -57,18 +66,27 @@ namespace 账号服务器
 		// 10000 个上限 ≈ 最坏 10MB (单包 1024 字节), 足够正常突发, 又能挡住洪水撑爆.
 		private const int 数据处理队列上限 = 10_000;
 
-		private static 限速桶 取桶(IPAddress ip)
+		// C06: 表满 fail-closed 共享哨兵桶 (解封时间=MaxValue 恒判封禁), 仅用于认证类请求.
+		private static readonly 限速桶 表满哨兵桶 = new 限速桶
+		{
+			解封时间 = DateTime.MaxValue
+		};
+
+		private static 限速桶 取桶(IPAddress ip, bool 认证用途 = false)
 		{
 			if (限速表.TryGetValue(ip, out var 已有桶))
 			{
 				return 已有桶;
 			}
-			// 超过硬上限直接复用一个"全局桶"语义: 拒绝新建,
-			// 由 是否被封禁 等调用方默认放行该 IP, 而非误封. 受害方向: 攻击者刷不
-			// 出新条目 + 已有正常用户不受影响; 但失败计数不再生效 — 这是
-			// 内存安全和限速效力的权衡, 优先保进程存活.
+			// C06: 表满时 UDP 源 IP 可伪造, 攻击者可撑爆表. 认证类请求改 fail-closed —
+			// 返回恒封禁的共享哨兵桶, 让未知 IP 的认证包被直接丢弃, 杜绝撑爆 per-IP 表后失败计数失效的暴破绕过.
+			// 非认证类(解析错误日志去抖/注册计数)仍返回临时桶, 不影响进程存活与正常体验.
 			if (限速表.Count >= 限速表上限)
 			{
+				if (认证用途)
+				{
+					return 表满哨兵桶;
+				}
 				return new 限速桶
 				{
 					失败窗口起点 = DateTime.UtcNow,
@@ -103,16 +121,24 @@ namespace 账号服务器
 						.Remove(kv);
 				}
 			}
+			foreach (var kv in 账号失败表)
+			{
+				限速桶 桶 = kv.Value;
+				bool 可丢弃2;
+				lock (桶) { 可丢弃2 = now >= 桶.解封时间 && (now - 桶.失败窗口起点).TotalSeconds > 账号失败窗口秒数; }
+				if (可丢弃2)
+					((System.Collections.Generic.ICollection<System.Collections.Generic.KeyValuePair<string, 限速桶>>)账号失败表).Remove(kv);
+			}
 		}
 
 		private static bool 是否被封禁(IPAddress ip)
 		{
-			return DateTime.UtcNow < 取桶(ip).解封时间;
+			return DateTime.UtcNow < 取桶(ip, 认证用途: true).解封时间;
 		}
 
 		private static void 记录认证失败(IPAddress ip)
 		{
-			限速桶 桶 = 取桶(ip);
+			限速桶 桶 = 取桶(ip, 认证用途: true);
 			lock (桶)
 			{
 				DateTime now = DateTime.UtcNow;
@@ -137,6 +163,60 @@ namespace 账号服务器
 			lock (桶)
 			{
 				桶.失败计数 = 0;
+			}
+		}
+
+		private static 限速桶 取账号桶(string 账号)
+		{
+			if (账号失败表.TryGetValue(账号, out var 已有))
+			{
+				return 已有;
+			}
+			if (账号失败表.Count >= 账号失败表上限)
+			{
+				return 表满哨兵桶;
+			}
+			return 账号失败表.GetOrAdd(账号, _ => new 限速桶 { 失败窗口起点 = DateTime.UtcNow });
+		}
+
+		private static bool 账号是否被封禁(string 账号)
+		{
+			if (string.IsNullOrEmpty(账号)) return false;
+			return DateTime.UtcNow < 取账号桶(账号).解封时间;
+		}
+
+		private static void 记录账号失败(string 账号)
+		{
+			if (string.IsNullOrEmpty(账号)) return;
+			限速桶 桶 = 取账号桶(账号);
+			if (桶 == 表满哨兵桶) return;
+			lock (桶)
+			{
+				DateTime now = DateTime.UtcNow;
+				if ((now - 桶.失败窗口起点).TotalSeconds > 账号失败窗口秒数)
+				{
+					桶.失败窗口起点 = now;
+					桶.失败计数 = 0;
+				}
+				桶.失败计数++;
+				if (桶.失败计数 >= 账号失败最大次数)
+				{
+					桶.解封时间 = now.AddSeconds(账号封禁秒数);
+					桶.失败计数 = 0;
+					主窗口.添加日志($"账号触发认证失败上限, 临时封禁 {账号封禁秒数}s: {账号}");
+				}
+			}
+		}
+
+		private static void 记录账号成功(string 账号)
+		{
+			if (string.IsNullOrEmpty(账号)) return;
+			限速桶 桶 = 取账号桶(账号);
+			if (桶 == 表满哨兵桶) return;
+			lock (桶)
+			{
+				桶.失败计数 = 0;
+				桶.解封时间 = DateTime.MinValue;
 			}
 		}
 
@@ -263,6 +343,11 @@ namespace 账号服务器
 										case "0":
 											if (array.Length == 4)
 											{
+												if (账号是否被封禁(array[2]))
+												{
+													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 1 用户名或密码错误"));
+													break;
+												}
 												// PROTO-01 v2: 客户端发来的 array[3] 必须是 64-char hex hash.
 												// 兼容历史明文账号: 校验通过且当前还是明文存储时, 把存储升级为 hash.
 												bool 登录通过 = 主窗口.账号数据.TryGetValue(array[2], out var value3)
@@ -270,11 +355,13 @@ namespace 账号服务器
 												if (!登录通过)
 												{
 													记录认证失败(result.客户地址.Address);
+													记录账号失败(array[2]);
 													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 1 用户名或密码错误"));
 												}
 												else
 												{
 													记录认证成功(result.客户地址.Address);
+													记录账号成功(array[2]);
 													// PROTO-01 / MED-E: 不再回显密码哈希, 客户端发包前已自行缓存.
 													// 响应固定 4 段: 包号 0 账号 区服列表 (客户端 登录界面.cs case "0" 以 array.Length==4 严格校验).
 													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 0 " + array[2] + " " + 主窗口.游戏区服));
@@ -317,6 +404,10 @@ namespace 账号服务器
 												{
 													发送数据(result.客户地址, Encoding.UTF8.GetBytes("3 用户名已经存在"));
 												}
+												else if (主窗口.账号数据.Count >= 主窗口.账号总数上限)
+												{
+													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 3 注册名额已满"));
+												}
 												else if (!主窗口.写盘许可())
 												{
 													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 3 服务器繁忙, 请稍后再试"));
@@ -335,6 +426,11 @@ namespace 账号服务器
 										case "2":
 											if (array.Length == 6)
 											{
+												if (账号是否被封禁(array[2]))
+												{
+													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 5 密保信息错误"));
+													break;
+												}
 												// PROTO-01 v2: array[3] 必须是 64-char hex 哈希, 强度校验在客户端完成
 												if (!账号数据.是哈希格式(array[3]))
 												{
@@ -350,6 +446,7 @@ namespace 账号服务器
 													if (!密保通过)
 													{
 														记录认证失败(result.客户地址.Address);
+														记录账号失败(array[2]);
 														发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 5 密保信息错误"));
 													}
 													else if (!主窗口.写盘许可())
@@ -359,6 +456,7 @@ namespace 账号服务器
 													else
 													{
 														记录认证成功(result.客户地址.Address);
+														记录账号成功(array[2]);
 														value4.账号密码 = array[3];
 														主窗口.保存账号(value4);
 														发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 4 " + array[1] + " " + array[2]));
@@ -370,6 +468,11 @@ namespace 账号服务器
 										case "3":
 											if (array.Length == 6)
 											{
+												if (账号是否被封禁(array[2]))
+												{
+													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 7 用户名或密码错误"));
+													break;
+												}
 												IPEndPoint value2;
 												// PROTO-01 v2: 兼容明文 + hash 存储, 通过即顺手升级
 												bool 需要升级门票 = false;
@@ -378,6 +481,7 @@ namespace 账号服务器
 												if (!凭据通过)
 												{
 													记录认证失败(result.客户地址.Address);
+													记录账号失败(array[2]);
 													发送数据(result.客户地址, Encoding.UTF8.GetBytes(array[0] + " 7 用户名或密码错误"));
 												}
 												else if (!主窗口.区服数据.TryGetValue(array[4], out value2))
@@ -393,6 +497,7 @@ namespace 账号服务器
 														catch (Exception ex升级2) { 主窗口.添加日志("升级密码存储失败: " + ex升级2.Message); }
 													}
 													记录认证成功(result.客户地址.Address);
+													记录账号成功(array[2]);
 													string text = 账号数据.生成门票();
 													发送门票(value2, text, array[2]);
 													// MED-E: 不再回显密码, 仅返回账号与门票.

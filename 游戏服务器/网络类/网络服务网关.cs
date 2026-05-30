@@ -40,12 +40,25 @@ namespace 游戏服务器.网络类
 
         public static bool 门票来源放行(IPEndPoint 来源)
         {
+            if (来源 == null || 来源.Address == null) return false;
+            System.Net.IPAddress addr = 来源.Address;
+            // C05: fail-closed — 白名单未配置时, 仅放行环回 (同机/本机账号服务器). 远程来源一律拒绝.
+            // 原 fail-open(空白名单放行所有源 IP) 导致默认部署可被任意 IP 注入伪造门票登录任意账号.
             if (门票来源白名单集合 == null || 门票来源白名单集合.Count == 0)
             {
-                return true;
+                if (System.Net.IPAddress.IsLoopback(addr))
+                {
+                    return true;
+                }
+                DateTime now0 = 主程.当前时间;
+                if ((now0 - 上次门票拒绝日志).TotalSeconds > 60)
+                {
+                    上次门票拒绝日志 = now0;
+                    主程.添加系统日志($"[门票来源被拒] 白名单未配置, 默认仅放行环回; 拒绝非本机 IP: {addr}. 请在 Setup.ini [General] 配置 门票来源白名单=账号服务器IP,127.0.0.1");
+                }
+                return false;
             }
-            if (来源 == null || 来源.Address == null) return false;
-            if (门票来源白名单集合.Contains(来源.Address.ToString()))
+            if (门票来源白名单集合.Contains(addr.ToString()))
             {
                 return true;
             }
@@ -54,7 +67,7 @@ namespace 游戏服务器.网络类
             if ((now - 上次门票拒绝日志).TotalSeconds > 60)
             {
                 上次门票拒绝日志 = now;
-                主程.添加系统日志($"[门票来源被拒] 非白名单 IP: {来源.Address}");
+                主程.添加系统日志($"[门票来源被拒] 非白名单 IP: {addr}");
             }
             return false;
         }
@@ -65,8 +78,8 @@ namespace 游戏服务器.网络类
             string raw = Settings.门票来源白名单;
             if (string.IsNullOrWhiteSpace(raw))
             {
-                主程.添加系统日志("[警告] 门票来源白名单 未配置, 任意 IP 可注入伪造门票登录任意账号. " +
-                    "建议在 Setup.ini [General] 段添加 \"门票来源白名单=账号服务器IP,127.0.0.1\"");
+                主程.添加系统日志("[安全] 门票来源白名单 未配置, 默认仅放行环回(127.0.0.1)的本机账号服务器; 远程账号服务器请显式配置. " +
+                    "在 Setup.ini [General] 段添加 \"门票来源白名单=账号服务器IP,127.0.0.1\"");
                 return;
             }
             foreach (string ip in raw.Split(',', ';'))
@@ -96,6 +109,10 @@ namespace 游戏服务器.网络类
         //public static ConcurrentQueue<string> Http门票数据;
 
         public static Dictionary<string, 门票信息> 门票数据表;
+
+        // C11: 门票表无界增长清扫. 攻击者只喷 UDP 不发 TCP 时, 门票永不被消费删除, 字典无界膨胀至 OOM.
+        private const int 门票表最大条目 = 20000;
+        private static DateTime 上次门票清扫 = DateTime.MinValue;
 
         //public static Http门票接收器 门票接收器Http;
 
@@ -420,6 +437,8 @@ namespace 游戏服务器.网络类
                     客户网络.处理数据();//处理客户端数据
             }
             //-----------------------
+            网络服务网关.清扫过期门票();
+            //-----------------------
             while (!网络服务网关.等待移除表.IsEmpty)
             {
                 客户网络 result;
@@ -453,6 +472,45 @@ namespace 游戏服务器.网络类
                             客户网络.发送封包(result);
                     }
                 }
+            }
+        }
+
+        // C11: 周期清扫过期门票, 防止攻击者只喷 UDP 不发 TCP 导致门票数据表无界增长 OOM.
+        private static void 清扫过期门票()
+        {
+            var 表 = 网络服务网关.门票数据表;
+            if (表 == null || 表.Count == 0)
+            {
+                return;
+            }
+            DateTime now = 主程.当前时间;
+            // 每 10 秒清扫一次过期项; 但一旦超过硬上限则立刻强制清扫一次, 不等节流窗口.
+            bool 超上限 = 表.Count > 门票表最大条目;
+            if (!超上限 && (now - 上次门票清扫).TotalSeconds < 10.0)
+            {
+                return;
+            }
+            上次门票清扫 = now;
+            System.Collections.Generic.List<string> 待删 = null;
+            foreach (var kv in 表)
+            {
+                if (now > kv.Value.有效时间)
+                {
+                    (待删 ?? (待删 = new System.Collections.Generic.List<string>())).Add(kv.Key);
+                }
+            }
+            if (待删 != null)
+            {
+                foreach (string k in 待删)
+                {
+                    表.Remove(k);
+                }
+            }
+            // 清掉过期项后仍超硬上限(全是 5 分钟内的新喷射), 直接整表清空止血, 牺牲极少数正常待登录门票.
+            if (表.Count > 门票表最大条目)
+            {
+                表.Clear();
+                主程.添加系统日志($"[门票防护] 门票数据表超过 {门票表最大条目} 条上限, 疑似 UDP 喷射, 已清空止血");
             }
         }
 

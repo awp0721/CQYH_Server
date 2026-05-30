@@ -80,7 +80,7 @@ namespace 游戏服务器
 
         public static bool 沙巴克掉装备 = false;
 
-        public static bool 限制重要封包间隔时间 = false;
+        public static bool 限制重要封包间隔时间 = true;
 
         public static bool 开启lua = true;
 
@@ -393,7 +393,7 @@ namespace 游戏服务器
             Settings.安全区内满血满蓝 = Settings.iniconfig.ReadBoolean("General", "安全区内满血满蓝", Settings.安全区内满血满蓝);
             Settings.下线宝宝不死 = Settings.iniconfig.ReadBoolean("General", "下线宝宝不死", Settings.下线宝宝不死);
 
-            Settings.专用网关登录器 = Settings.iniconfig.ReadBoolean("General", "专用网关登录器", Settings.下线宝宝不死);
+            Settings.专用网关登录器 = Settings.iniconfig.ReadBoolean("General", "专用网关登录器", Settings.专用网关登录器);
 
             for (int i = 0; i < 6; i++)
             {

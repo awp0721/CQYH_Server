@@ -225,6 +225,12 @@ namespace 游戏服务器.数据类
 
 		public void 竞价拍卖(角色数据 角色数据, int 拍卖序号, int 当前竞价)
 		{
+			// C04: 只允许对当前活动件序号出价. 原实现用全局 当前拍卖价格/当前拍卖角色 比价改写,
+			// 却不校验 拍卖序号 属于活动件, 攻击者可对非活动序号越序出价劫持他人中标物品并打乱退款记账.
+			if (this.当前拍卖物品 == null || !this.拍卖列表.TryGetValue(this.当前拍卖物品, out var 活动序号) || 活动序号 != 拍卖序号)
+			{
+				return;
+			}
 			if (5000 <= 当前竞价 && 角色数据.金币数量 >= 当前竞价 && 当前竞价 > this.当前拍卖价格 && this.拍卖参与列表.ContainsKey(拍卖序号) && this.拍卖参与列表[拍卖序号].ContainsKey(角色数据))
 			{
 				if (this.当前拍卖角色 != null && !this.拍卖参与列表[拍卖序号][this.当前拍卖角色].放弃 && this.拍卖参与列表[拍卖序号][this.当前拍卖角色].出价 > 0)
@@ -268,12 +274,13 @@ namespace 游戏服务器.数据类
 				this.当前拍卖角色 = null;
 				KeyValuePair<角色数据, 拍卖详情> keyValuePair;
 				keyValuePair = this.拍卖参与列表[拍卖序号].Where((KeyValuePair<角色数据, 拍卖详情> O) => !O.Value.放弃).MaxBy((KeyValuePair<角色数据, 拍卖详情> O) => O.Value.出价);
-				this.当前拍卖价格 = keyValuePair.Value.出价;
+				// D01: MaxBy 在无未放弃参与者时返回 default(Value==null), 原 keyValuePair.Value.出价 抛 NRE (远程可达).
+				this.当前拍卖价格 = keyValuePair.Value?.出价 ?? 0;
 				this.发送封包(new 通知组队拍卖
 				{
 					拍卖顺序 = 拍卖序号,
-					对象编号 = ((keyValuePair.Value.出价 > 0) ? keyValuePair.Key.角色编号 : 0),
-					当前价格 = keyValuePair.Value.出价,
+					对象编号 = ((keyValuePair.Value != null && keyValuePair.Value.出价 > 0) ? keyValuePair.Key.角色编号 : 0),
+					当前价格 = keyValuePair.Value?.出价 ?? 0,
 					重置时间 = 120000
 				});
 				this.当前拍卖物品.生成时间.V = 主程.当前时间.AddMinutes(2.0);
@@ -293,9 +300,12 @@ namespace 游戏服务器.数据类
 
 		public void 放弃所有拍卖(角色数据 角色数据)
 		{
-			foreach (KeyValuePair<int, Dictionary<角色数据, 拍卖详情>> item in this.拍卖参与列表)
+			// D01: 快照键迭代 + TryGetValue 重取 + MaxBy 空守卫. 原 foreach 直接枚举活字典, 而循环体内
+			// 拍卖分配物品 会 Remove 同一字典 -> 集合已修改异常; 且 MaxBy 在无未放弃参与者时返回 default(Value==null) -> NRE.
+			// 普通账号自建拍卖队 + 自踢/换图即可远程触发, 经主循环线程路径会跳过整 tick.
+			foreach (int 序号 in this.拍卖参与列表.Keys.ToList())
 			{
-				if (!item.Value.TryGetValue(角色数据, out var value))
+				if (!this.拍卖参与列表.TryGetValue(序号, out var 参与字典) || !参与字典.TryGetValue(角色数据, out var value))
 				{
 					continue;
 				}
@@ -305,31 +315,31 @@ namespace 游戏服务器.数据类
 					value.出价 = 0;
 				}
 				value.放弃 = true;
-				if (this.拍卖序号 == item.Key && this.当前拍卖角色 == 角色数据)
+				if (this.拍卖序号 == 序号 && this.当前拍卖角色 == 角色数据)
 				{
 					this.当前拍卖角色 = null;
 					KeyValuePair<角色数据, 拍卖详情> keyValuePair;
-					keyValuePair = this.拍卖参与列表[this.拍卖序号].Where((KeyValuePair<角色数据, 拍卖详情> O) => !O.Value.放弃).MaxBy((KeyValuePair<角色数据, 拍卖详情> O) => O.Value.出价);
-					this.当前拍卖价格 = keyValuePair.Value.出价;
+					keyValuePair = 参与字典.Where((KeyValuePair<角色数据, 拍卖详情> O) => !O.Value.放弃).MaxBy((KeyValuePair<角色数据, 拍卖详情> O) => O.Value.出价);
+					this.当前拍卖价格 = keyValuePair.Value?.出价 ?? 0;
 					this.发送封包(new 通知组队拍卖
 					{
 						拍卖顺序 = this.拍卖序号,
-						对象编号 = ((keyValuePair.Value.出价 > 0) ? keyValuePair.Key.角色编号 : 0),
-						当前价格 = keyValuePair.Value.出价,
+						对象编号 = ((keyValuePair.Value != null && keyValuePair.Value.出价 > 0) ? keyValuePair.Key.角色编号 : 0),
+						当前价格 = keyValuePair.Value?.出价 ?? 0,
 						重置时间 = 120000
 					});
 					this.当前拍卖物品.生成时间.V = 主程.当前时间.AddMinutes(2.0);
 				}
 				角色数据.网络连接?.发送封包(new 放弃组队拍卖
 				{
-					拍卖顺序 = item.Key,
+					拍卖顺序 = 序号,
 					对象编号 = 角色数据.角色编号
 				});
 				int num;
-				num = item.Value.Where((KeyValuePair<角色数据, 拍卖详情> O) => !O.Value.放弃).Count();
+				num = 参与字典.Where((KeyValuePair<角色数据, 拍卖详情> O) => !O.Value.放弃).Count();
 				if (num == 0 || (this.当前拍卖角色 != null && num == 1))
 				{
-					this.拍卖分配物品(角色数据, item.Key);
+					this.拍卖分配物品(角色数据, 序号);
 				}
 			}
 		}

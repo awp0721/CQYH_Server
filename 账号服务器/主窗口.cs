@@ -33,6 +33,10 @@ namespace 账号服务器
         // 账号数据 由多个网络工作线程读写, UI 线程也会读 .Count, 必须线程安全.
         public static ConcurrentDictionary<string, 账号数据> 账号数据;
 
+        // C10: 账号总数硬上限. 写盘节流仅限速(20 写/秒)不限总量, 伪造源 IP 可绕过 per-IP 注册限速
+        // 持续灌文件耗尽磁盘/inode. 此上限给磁盘文件数封顶; 超过后拒绝新注册, 不再创建新文件.
+        public const int 账号总数上限 = 1_000_000;
+
         public static Dictionary<string, IPEndPoint> 区服数据;
 
 
@@ -148,6 +152,11 @@ namespace 账号服务器
 
         public static void 添加账号(账号数据 账号)
         {
+            // C10: 账号总数封顶, 防止伪造 IP 绕过限速持续灌文件耗尽磁盘/inode.
+            if (账号数据.Count >= 账号总数上限)
+            {
+                return;
+            }
             // TryAdd 原子地保证不会被并发覆盖, 同时避免 ContainsKey -> Add 的 TOCTOU.
             if (账号数据.TryAdd(账号.账号名字, 账号))
             {

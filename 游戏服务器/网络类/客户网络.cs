@@ -623,6 +623,8 @@ namespace 游戏服务器.网络类
 
         public void 处理封包(特权引导寻路 P)
         {
+            // C17: 补阶段守卫. 原缺守卫, 阶段0(未登录)即可探测守卫NPC坐标并诱发查表/回包.
+            if (this.当前阶段 != 游戏阶段.正在游戏 || this.绑定角色 == null) return;
             if (地图处理网关.地图实例表.TryGetValue(P.地图编号 * 16 + 1, out var value))
             {
                 守卫刷新 守卫刷新;
@@ -3333,7 +3335,13 @@ namespace 游戏服务器.网络类
                 this.尝试断开连接(new Exception($"阶段异常,断开连接.  处理封包: {P.GetType()},  当前阶段:{this.当前阶段}"));
                 return;
             }
-            this.绑定角色.所属行会?.更新行会权限(P.行会职位, P.权限标志);
+            // C02: 仅会长可改存储权限. 原实现无职位鉴权, 任意会员可自授行会仓库取出权限盗空公会仓库, 或清空会长权限做 DoS.
+            行会数据 行会 = this.绑定角色.所属行会;
+            if (行会 == null || !行会.行会成员.ContainsKey(this.绑定角色.角色数据) || 行会.行会成员[this.绑定角色.角色数据] != 行会职位.会长)
+            {
+                return;
+            }
+            行会.更新行会权限(P.行会职位, (ushort)(P.权限标志 & 0x0FFF));
         }
 
         public void 处理封包(查看结盟申请 P)
@@ -3909,16 +3917,14 @@ namespace 游戏服务器.网络类
         public void 处理封包(客户账号登录 P)
         {
 
-            DateTime v;
             门票信息 value;
+            // C19: 网卡封禁原以客户端 1001 封包自报的 P.物理地址 作键, 该值客户端可控可任意伪造, 封禁形同虚设.
+            // 不可伪造的封禁边界是 accept 层按 socket RemoteEndPoint 的 IP 封禁(网络服务网关.异步连接)与账号封禁.
+            // 对齐 获取真实IP地址(PROTO-08) 的处置: 不再把自报 MAC 作访问控制依据.
             if (this.当前阶段 != 0)
             {
                 this.尝试断开连接(new Exception($"阶段异常,断开连接.  处理封包: {P.GetType()},  当前阶段:{this.当前阶段}"));
                 return;
-            }
-            else if (系统数据.数据.网卡封禁.TryGetValue(P.物理地址, out v) && v > 主程.当前时间)
-            {
-                this.尝试断开连接(new Exception("网卡封禁, 限制登录"));
             }
             else if (!网络服务网关.门票数据表.TryGetValue(P.登录门票, out value))
             {
@@ -3943,7 +3949,7 @@ namespace 游戏服务器.网络类
                 }
                 else
                 {
-                    账号数据2.账号登录(this, P.物理地址);
+                    账号数据2.账号登录(this, this.网络地址);
                 }
             }
             网络服务网关.门票数据表.Remove(P.登录门票);
